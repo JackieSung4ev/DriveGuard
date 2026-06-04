@@ -1,0 +1,30 @@
+# Google OAuth / rclone credentials
+credentials.json
+token.json
+client_secret*.json
+rclone.conf
+
+# Runtime config and secrets
+config.conf
+*.pass
+mysql.cnf
+*.cnf.local
+
+# Logs
+*.log
+logs/
+
+# Backup outputs
+*.tar.gz
+*.sql.gz
+*.enc
+backup/
+backups/
+bt_backup/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
