@@ -39,20 +39,21 @@ ln -sfn /usr/local/bin/driveguard /usr/bin/driveguard
 dg help
 ```
 
-## 2. 手动安装依赖
+## 2. 安装依赖
 
-`dg install-deps` 目前只自动处理 Debian/Ubuntu。CentOS Stream 8 需要手动安装：
+现在 DriveGuard 已支持在 CentOS/RHEL 系自动安装依赖：
 
 ```bash
-dnf --disablerepo=cloudflare install -y bash cronie openssl tar gzip util-linux mariadb curl unzip
-systemctl enable --now crond
+dg install-deps
 ```
 
-CentOS 默认源可能没有 `rclone`。推荐使用 rclone 官方安装脚本：
+它会安装 `cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip` 和 MariaDB 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。
+
+如果遇到第三方源元数据错误，例如 Cloudflare repo 404，可以临时禁用坏源后重试：
 
 ```bash
-curl -fsSL https://rclone.org/install.sh | bash
-rclone version
+dnf --disablerepo=cloudflare install -y git
+dg install-deps
 ```
 
 如果需要数据库备份，确认 MySQL dump 工具可用：

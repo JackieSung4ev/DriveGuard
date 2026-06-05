@@ -33,13 +33,13 @@ cd DriveGuard
 sudo bash driveguard.sh install
 ```
 
-Debian/Ubuntu 可以自动安装依赖：
+Debian/Ubuntu、CentOS/RHEL 系可以自动安装依赖：
 
 ```bash
 sudo dg install-deps
 ```
 
-CentOS、Oracle Linux 等系统请手动安装 `rclone`、`cronie`、`openssl`、`tar`、`gzip`、`util-linux` 和 MySQL/MariaDB 客户端。实战步骤见 [CentOS Stream 8 + Google Drive 初始配置](docs/initial-setup-centos-google-drive.md)。
+CentOS/RHEL 系会安装 `cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip` 和 MariaDB 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。实战步骤见 [CentOS Stream 8 + Google Drive 初始配置](docs/initial-setup-centos-google-drive.md)。
 
 首次配置：
 

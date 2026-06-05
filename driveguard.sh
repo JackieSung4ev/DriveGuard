@@ -149,16 +149,28 @@ valid_positive_int() {
 
 install_dependencies() {
   require_root
+  local distro=""
   if [[ -r /etc/os-release ]]; then
     # shellcheck source=/dev/null
     source /etc/os-release
-    local distro="${ID:-} ${ID_LIKE:-}"
-    if [[ "$distro" != *debian* && "$distro" != *ubuntu* ]]; then
-      die "当前脚本只承诺支持 Debian/Ubuntu，检测到：${PRETTY_NAME:-unknown}"
-    fi
+    distro="${ID:-} ${ID_LIKE:-}"
   fi
-  have apt-get || die "未找到 apt-get，当前系统不像 Debian/Ubuntu"
 
+  if [[ "$distro" == *debian* || "$distro" == *ubuntu* || ( -z "$distro" && -x /usr/bin/apt-get ) ]]; then
+    install_debian_dependencies
+  elif [[ "$distro" == *rhel* || "$distro" == *fedora* || "$distro" == *centos* || "$distro" == *rocky* || "$distro" == *almalinux* || "$distro" == *ol* || ( -z "$distro" && ( -x /usr/bin/dnf || -x /usr/bin/yum ) ) ]]; then
+    install_rhel_dependencies
+  else
+    die "当前脚本支持 Debian/Ubuntu/CentOS/RHEL 系，检测到：${PRETTY_NAME:-unknown}"
+  fi
+
+  ensure_dirs
+  ensure_cron_service || true
+  log "依赖检查完成"
+}
+
+install_debian_dependencies() {
+  have apt-get || die "未找到 apt-get，当前系统不像 Debian/Ubuntu"
   log "开始安装依赖：rclone、cron、openssl、MySQL 客户端等"
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y \
@@ -167,9 +179,59 @@ install_dependencies() {
     DEBIAN_FRONTEND=noninteractive apt-get install -y default-mysql-client \
       || DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-client
   fi
-  ensure_dirs
-  ensure_cron_service || true
-  log "依赖检查完成"
+}
+
+install_rhel_dependencies() {
+  local pkg_mgr
+  if have dnf; then
+    pkg_mgr="dnf"
+  elif have yum; then
+    pkg_mgr="yum"
+  else
+    die "未找到 dnf/yum，当前系统不像 CentOS/RHEL"
+  fi
+
+  log "开始安装依赖：rclone、cronie、openssl、MySQL/MariaDB 客户端等"
+  rhel_install_packages "$pkg_mgr" bash ca-certificates cronie openssl tar gzip util-linux curl unzip mariadb
+
+  if ! have mysqldump && ! have mariadb-dump; then
+    rhel_install_packages "$pkg_mgr" mariadb
+  fi
+
+  if ! have rclone; then
+    if ! rhel_install_packages "$pkg_mgr" rclone; then
+      log "系统源未提供 rclone，改用 rclone 官方安装脚本"
+      install_rclone_official
+    fi
+  fi
+}
+
+rhel_install_packages() {
+  local pkg_mgr="$1"
+  shift
+  if "$pkg_mgr" install -y "$@"; then
+    return 0
+  fi
+  if [[ -d /etc/yum.repos.d ]] && grep -Rqs '^\[cloudflare\]' /etc/yum.repos.d; then
+    log "检测到 cloudflare repo，安装失败后临时禁用该 repo 重试"
+    "$pkg_mgr" --disablerepo=cloudflare install -y "$@"
+    return $?
+  fi
+  return 1
+}
+
+install_rclone_official() {
+  have curl || die "未找到 curl，无法下载 rclone 官方安装脚本"
+  local installer
+  installer="$(mktemp)"
+  if curl -fsSL https://rclone.org/install.sh -o "$installer"; then
+    bash "$installer"
+    rm -f "$installer"
+  else
+    rm -f "$installer"
+    die "下载 rclone 官方安装脚本失败，请检查网络后重试"
+  fi
+  have rclone || die "rclone 安装后仍不可用，请手动执行：curl -fsSL https://rclone.org/install.sh | bash"
 }
 
 ensure_cron_service() {
@@ -945,7 +1007,7 @@ usage() {
 用法：
   $0 menu              打开中文交互菜单
   $0 install           安装/更新 driveguard 和 dg 短命令
-  $0 install-deps      安装 Debian/Ubuntu 依赖
+  $0 install-deps      安装 Debian/Ubuntu/CentOS/RHEL 依赖
   $0 auth              配置/检查 rclone 云盘 remote
   $0 configure         设置基础配置、密码、MySQL 连接
   $0 cron              安装/更新 cron 定时任务
