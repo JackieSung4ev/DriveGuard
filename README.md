@@ -1,6 +1,6 @@
 # DriveGuard
 
-DriveGuard 是一个面向 Linux 服务器的独立云端备份脚本。它通过 `rclone` 连接 Google Drive、OneDrive、S3、WebDAV、SFTP 等远程存储，并通过中文交互菜单配置网站目录备份、MySQL/MariaDB 数据库备份、加密、定时任务、日志、保留份数清理和 cron 守护。
+DriveGuard 是一个面向 Linux 服务器的独立云端备份脚本。它通过 `rclone` 连接任意兼容的云盘、对象存储或远程文件系统，例如 Google Drive、OneDrive、S3、WebDAV、SFTP，并通过中文交互菜单配置网站目录备份、MySQL/MariaDB 数据库备份、加密、定时任务、日志、保留份数清理和 cron 守护。
 
 项目入口脚本：
 
@@ -20,7 +20,7 @@ sudo dg backup
 - Debian/Ubuntu 依赖自动安装。
 - 中文菜单管理配置、授权、备份列表、定时任务和卸载。
 - 使用 `rclone` 完成云盘 remote 授权和上传。
-- 默认以 Google Drive 为配置示例，也可使用其他 `rclone` 支持的远程存储。
+- 支持任意满足基础文件操作的 `rclone` remote，例如 Google Drive、OneDrive、Dropbox、S3 兼容对象存储、WebDAV、SFTP。
 - 手动维护网站目录和数据库列表。
 - 网站备份为 `.tar.gz.enc`。
 - 数据库备份为 `.sql.gz.enc`。
@@ -84,9 +84,9 @@ sudo dg auth
 
 DriveGuard 不直接绑定某一家云盘，真正上传由 `rclone` 完成。你只需要先在 `rclone` 里配置一个 remote，然后在 `dg configure` 里填写这个 remote 名称。
 
-默认 remote 名称是 `gdrive`，云端目录是 `driveguard`。如果你的 remote 名叫 `onedrive`，也可以在配置时把 remote 改成 `onedrive`。
+默认 remote 名称是 `cloud`，云端目录是 `driveguard`。如果你已有 remote，例如 `onedrive`、`s3backup` 或 `gdrive`，也可以在配置时改成已有名称。
 
-### Google Drive 示例
+### 通用配置流程
 
 运行：
 
@@ -97,21 +97,25 @@ sudo dg auth
 进入 `rclone config` 后，常见流程是：
 
 1. 选择 `n` 新建 remote。
-2. `name` 填 `gdrive`。
-3. `Storage` 选择 Google Drive。
-4. `client_id` 和 `client_secret` 可以先留空，使用 rclone 默认配置。
-5. `scope` 选择 `drive` 或 `drive.file`。
-6. `root_folder_id` 和 `service_account_file` 通常留空。
-7. 无浏览器服务器选择非自动配置，按提示在本地电脑完成授权，再把 token 粘回服务器。
-8. 保存 remote 后，脚本会检查 `gdrive:` 是否可访问。
+2. `name` 建议填 `cloud`，或填一个能表达用途的名字，例如 `onedrive`、`s3backup`。
+3. `Storage` 选择你的目标存储类型。
+4. 按 `rclone` 提示填写授权、密钥、endpoint 或账号信息。
+5. 如果服务器无浏览器，选择非自动配置，按提示在本地电脑完成授权，再把 token 粘回服务器。
+6. 保存 remote 后，脚本会检查 `remote:` 是否可访问。
 
 你也可以直接手动验证：
 
 ```bash
-rclone lsd gdrive:
+rclone lsd cloud:
 ```
 
-### 其他云盘
+### 常见后端提示
+
+- Google Drive：Storage 选择 Google Drive，`client_id` 和 `client_secret` 可以先留空，scope 通常选 `drive` 或 `drive.file`。
+- OneDrive / Dropbox：通常按提示走浏览器 OAuth 授权即可。
+- S3 兼容对象存储：需要填写 provider、access key、secret key、region、endpoint 等信息。
+- WebDAV：需要填写 URL、用户名和密码。
+- SFTP：需要填写主机、端口、用户名，以及密码或 SSH key。
 
 只要 `rclone` 支持，并且 remote 支持这些操作，DriveGuard 就可以使用：
 
@@ -171,7 +175,7 @@ sudo dg configure
 
 可配置：
 
-- rclone remote 名称，默认 `gdrive`
+- rclone remote 名称，默认 `cloud`
 - 云端远程目录，默认 `driveguard`
 - 每个网站/数据库保留份数，默认 `7`
 - 本地备份暂存目录
@@ -406,7 +410,7 @@ sudo dg uninstall
 检查 rclone remote：
 
 ```bash
-rclone lsd gdrive:
+rclone lsd cloud:
 ```
 
 检查脚本配置：

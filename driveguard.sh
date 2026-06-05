@@ -20,7 +20,7 @@ LOG_FILE="${LOG_FILE:-${LOG_DIR}/backup.log}"
 RCLONE_LOG_FILE="${RCLONE_LOG_FILE:-${LOG_DIR}/rclone.log}"
 LOCK_FILE="${LOCK_FILE:-${STATE_DIR}/backup.lock}"
 
-RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
+RCLONE_REMOTE="${RCLONE_REMOTE:-cloud}"
 RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
 RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
 KEEP_COPIES="${KEEP_COPIES:-7}"
@@ -78,7 +78,7 @@ load_config() {
   LOG_FILE="${LOG_FILE:-${LOG_DIR}/backup.log}"
   RCLONE_LOG_FILE="${RCLONE_LOG_FILE:-${LOG_DIR}/rclone.log}"
   LOCK_FILE="${LOCK_FILE:-${STATE_DIR}/backup.lock}"
-  RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
+  RCLONE_REMOTE="${RCLONE_REMOTE:-cloud}"
   RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
   RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
   KEEP_COPIES="${KEEP_COPIES:-7}"
@@ -219,9 +219,9 @@ configure_rclone_remote() {
 
   printf '\nrclone 云盘 remote 配置说明：\n'
   printf '1. 下面会进入 rclone config。\n'
-  printf '2. 备份到 Google Drive 时，新建 remote 建议名称填写：%s\n' "$RCLONE_REMOTE"
-  printf '3. 也可以选择 OneDrive、Dropbox、S3、WebDAV、SFTP 等其他 rclone 支持的存储。\n'
-  printf '4. 服务器无浏览器时，按 rclone 提示在本地电脑授权，再把 token 粘回来。\n\n'
+  printf '2. 新建 remote 时建议名称填写：%s，或使用你已有的 remote 名称。\n' "$RCLONE_REMOTE"
+  printf '3. Storage 选择你的目标存储，例如 Google Drive、OneDrive、S3、WebDAV、SFTP 等。\n'
+  printf '4. 如果该存储需要浏览器授权，按 rclone 提示在本地电脑授权，再把 token 粘回来。\n\n'
 
   if rclone listremotes | grep -qx "${RCLONE_REMOTE}:"; then
     if confirm "检测到 ${RCLONE_REMOTE}: 已存在，是否先尝试重新授权"; then
