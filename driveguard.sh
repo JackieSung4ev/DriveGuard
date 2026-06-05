@@ -198,30 +198,30 @@ install_cli() {
   install_self
 }
 
-check_gdrive_auth() {
+check_rclone_remote() {
   load_config
   have rclone || die "未找到 rclone，请先执行安装依赖"
   if ! rclone listremotes | grep -qx "${RCLONE_REMOTE}:"; then
-    die "rclone remote 不存在：${RCLONE_REMOTE}:，请先做 Google Drive 授权"
+    die "rclone remote 不存在：${RCLONE_REMOTE}:，请先配置云盘 remote"
   fi
   if rclone lsd "${RCLONE_REMOTE}:" >/dev/null 2>>"$RCLONE_LOG_FILE"; then
-    log "Google Drive 连接正常：${RCLONE_REMOTE}:"
+    log "rclone remote 连接正常：${RCLONE_REMOTE}:"
   else
-    die "Google Drive 连接失败，请重新授权或查看：$RCLONE_LOG_FILE"
+    die "rclone remote 连接失败，请重新授权或查看：$RCLONE_LOG_FILE"
   fi
 }
 
-authorize_gdrive() {
+configure_rclone_remote() {
   require_root
   load_config
   ensure_dirs
   have rclone || die "未找到 rclone，请先执行安装依赖"
 
-  printf '\nGoogle Drive 授权说明：\n'
+  printf '\nrclone 云盘 remote 配置说明：\n'
   printf '1. 下面会进入 rclone config。\n'
-  printf '2. 新建 remote 时建议名称填写：%s\n' "$RCLONE_REMOTE"
-  printf '3. Storage 选择 Google Drive，scope 通常选 drive 或 drive.file。\n'
-  printf '4. 服务器无浏览器时，按 rclone 提示在本地电脑执行 authorize，再把 token 粘回来。\n\n'
+  printf '2. 备份到 Google Drive 时，新建 remote 建议名称填写：%s\n' "$RCLONE_REMOTE"
+  printf '3. 也可以选择 OneDrive、Dropbox、S3、WebDAV、SFTP 等其他 rclone 支持的存储。\n'
+  printf '4. 服务器无浏览器时，按 rclone 提示在本地电脑授权，再把 token 粘回来。\n\n'
 
   if rclone listremotes | grep -qx "${RCLONE_REMOTE}:"; then
     if confirm "检测到 ${RCLONE_REMOTE}: 已存在，是否先尝试重新授权"; then
@@ -239,7 +239,7 @@ authorize_gdrive() {
     RCLONE_REMOTE="$new_remote"
     save_config
   fi
-  check_gdrive_auth
+  check_rclone_remote
 }
 
 set_archive_password() {
@@ -289,7 +289,7 @@ configure_general() {
   read -r -p "rclone remote 名称 [${RCLONE_REMOTE}]: " input
   [[ -n "$input" ]] && RCLONE_REMOTE="$input"
 
-  read -r -p "Google Drive 远程目录 [${RCLONE_REMOTE_PATH}]: " input
+  read -r -p "云端远程目录 [${RCLONE_REMOTE_PATH}]: " input
   [[ -n "$input" ]] && RCLONE_REMOTE_PATH="${input#/}"
   RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH%/}"
 
@@ -488,7 +488,7 @@ upload_and_prune() {
   local subdir="$2"
   local remote_dir
   remote_dir="$(remote_dir_for "$subdir")"
-  check_gdrive_auth
+  check_rclone_remote
   rclone mkdir "$remote_dir" >>"$RCLONE_LOG_FILE" 2>&1
   rclone copy "$local_file" "$remote_dir" \
     --transfers 1 --checkers 4 --drive-chunk-size "$RCLONE_CHUNK_SIZE" \
@@ -728,7 +728,7 @@ uninstall_app() {
   printf '\n卸载说明：\n'
   printf '  - 会移除本脚本安装的 cron 定时任务。\n'
   printf '  - 会移除本脚本安装的 systemd cron 守护。\n'
-  printf '  - 不会删除 Google Drive 上已上传的备份。\n'
+  printf '  - 不会删除云端已上传的备份。\n'
   printf '  - 配置、密码、日志、本地备份目录会逐项询问后再删除。\n\n'
   confirm "确认开始卸载 ${DISPLAY_NAME}" || return 0
 
@@ -788,7 +788,7 @@ menu() {
   while true; do
     printf '\n%s 中文管理菜单\n' "$DISPLAY_NAME"
     printf '1. 安装/检查依赖\n'
-    printf '2. Google Drive 授权/检查\n'
+    printf '2. rclone 云盘授权/检查\n'
     printf '3. 基础配置和密码\n'
     printf '4. 管理网站备份列表\n'
     printf '5. 管理数据库备份列表\n'
@@ -803,7 +803,7 @@ menu() {
     read -r -p "请选择： " choice
     case "$choice" in
       1) install_dependencies; pause_enter ;;
-      2) authorize_gdrive; pause_enter ;;
+      2) configure_rclone_remote; pause_enter ;;
       3) configure_general; pause_enter ;;
       4) manage_sites_menu ;;
       5) manage_databases_menu ;;
@@ -825,7 +825,7 @@ usage() {
   $0 menu              打开中文交互菜单
   $0 install           安装/更新 driveguard 和 dg 短命令
   $0 install-deps      安装 Debian/Ubuntu 依赖
-  $0 auth              配置/检查 Google Drive 授权
+  $0 auth              配置/检查 rclone 云盘 remote
   $0 configure         设置基础配置、密码、MySQL 连接
   $0 cron              安装/更新 cron 定时任务
   $0 install-guard     安装 systemd cron 守护 timer
@@ -846,7 +846,7 @@ main() {
     menu) menu ;;
     install) install_cli ;;
     install-deps) install_dependencies ;;
-    auth) authorize_gdrive ;;
+    auth) configure_rclone_remote ;;
     configure) configure_general ;;
     cron) install_cron_entries ;;
     install-guard) install_systemd_guard ;;
