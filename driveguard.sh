@@ -25,10 +25,14 @@ RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
 RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
 KEEP_COPIES="${KEEP_COPIES:-7}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/${APP_NAME}}"
+AUTO_DISCOVER_SITES="${AUTO_DISCOVER_SITES:-1}"
+AUTO_DISCOVER_DATABASES="${AUTO_DISCOVER_DATABASES:-1}"
+SITE_ROOTS="${SITE_ROOTS:-/www/wwwroot /var/www /srv/www /usr/share/nginx/html}"
 MYSQL_HOST="${MYSQL_HOST:-localhost}"
 MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_SOCKET="${MYSQL_SOCKET:-}"
 MYSQLDUMP_BIN="${MYSQLDUMP_BIN:-}"
+MYSQL_BIN="${MYSQL_BIN:-}"
 CRON_EXPR="${CRON_EXPR:-0 3 * * *}"
 ENABLE_CRON_GUARD="${ENABLE_CRON_GUARD:-1}"
 
@@ -83,10 +87,14 @@ load_config() {
   RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
   KEEP_COPIES="${KEEP_COPIES:-7}"
   BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/${APP_NAME}}"
+  AUTO_DISCOVER_SITES="${AUTO_DISCOVER_SITES:-1}"
+  AUTO_DISCOVER_DATABASES="${AUTO_DISCOVER_DATABASES:-1}"
+  SITE_ROOTS="${SITE_ROOTS:-/www/wwwroot /var/www /srv/www /usr/share/nginx/html}"
   MYSQL_HOST="${MYSQL_HOST:-localhost}"
   MYSQL_PORT="${MYSQL_PORT:-3306}"
   MYSQL_SOCKET="${MYSQL_SOCKET:-}"
   MYSQLDUMP_BIN="${MYSQLDUMP_BIN:-}"
+  MYSQL_BIN="${MYSQL_BIN:-}"
   CRON_EXPR="${CRON_EXPR:-0 3 * * *}"
   ENABLE_CRON_GUARD="${ENABLE_CRON_GUARD:-1}"
 }
@@ -108,7 +116,8 @@ save_config() {
       SITES_FILE DATABASES_FILE ARCHIVE_PASSWORD_FILE MYSQL_DEFAULTS_FILE \
       STATE_DIR LOG_DIR LOG_FILE RCLONE_LOG_FILE LOCK_FILE \
       RCLONE_REMOTE RCLONE_REMOTE_PATH RCLONE_CHUNK_SIZE KEEP_COPIES \
-      BACKUP_ROOT MYSQL_HOST MYSQL_PORT MYSQL_SOCKET MYSQLDUMP_BIN \
+      BACKUP_ROOT AUTO_DISCOVER_SITES AUTO_DISCOVER_DATABASES SITE_ROOTS \
+      MYSQL_HOST MYSQL_PORT MYSQL_SOCKET MYSQLDUMP_BIN MYSQL_BIN \
       CRON_EXPR ENABLE_CRON_GUARD
     do
       printf '%s=%q\n' "$key" "${!key}"
@@ -434,6 +443,69 @@ find_mysqldump_bin() {
   return 1
 }
 
+find_mysql_client_bin() {
+  local candidate
+  for candidate in "$MYSQL_BIN" mysql mariadb; do
+    [[ -n "$candidate" ]] || continue
+    if [[ "$candidate" == */* && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    if [[ "$candidate" != */* ]] && have "$candidate"; then
+      command -v "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+discover_sites() {
+  local root child found name
+  for root in $SITE_ROOTS; do
+    [[ -d "$root" ]] || continue
+    if [[ -e "$root/index.html" || -e "$root/index.htm" || -e "$root/index.php" || -e "$root/.htaccess" ]]; then
+      name="$(basename "$root")"
+      printf '%s|%s|\n' "$name" "$root"
+      continue
+    fi
+    found=0
+    while IFS= read -r child; do
+      found=1
+      name="$(basename "$child")"
+      printf '%s|%s|\n' "$name" "$child"
+    done < <(find "$root" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | sort)
+    if [[ "$found" -eq 0 ]]; then
+      name="$(basename "$root")"
+      printf '%s|%s|\n' "$name" "$root"
+    fi
+  done
+}
+
+discover_databases() {
+  [[ -s "$MYSQL_DEFAULTS_FILE" ]] || return 0
+  local client_bin output
+  client_bin="$(find_mysql_client_bin)" || {
+    log "未找到 mysql/mariadb 客户端，无法自动发现数据库"
+    return 0
+  }
+
+  local mysql_cmd=("$client_bin" "--defaults-extra-file=$MYSQL_DEFAULTS_FILE" "-N" "-B")
+  if [[ -n "$MYSQL_SOCKET" ]]; then
+    mysql_cmd+=("--socket=$MYSQL_SOCKET")
+  else
+    mysql_cmd+=("--host=$MYSQL_HOST" "--port=$MYSQL_PORT")
+  fi
+  mysql_cmd+=("-e" "show databases;")
+
+  if ! output="$("${mysql_cmd[@]}" 2>>"$LOG_FILE")"; then
+    log "自动发现数据库失败，请检查 MySQL 连接信息：$MYSQL_DEFAULTS_FILE"
+    return 0
+  fi
+  printf '%s\n' "$output" \
+    | grep -Ev '^(information_schema|mysql|performance_schema|sys)$' \
+    | sed '/^[[:space:]]*$/d' || true
+}
+
 remote_dir_for() {
   local subdir="$1"
   if [[ -n "$RCLONE_REMOTE_PATH" ]]; then
@@ -585,26 +657,60 @@ backup_all() {
 
   local site_count=0
   local db_count=0
-  local name path excludes db_name
+  local name path excludes db_name site_key
+  local -A seen_site_paths=()
+  local -A seen_databases=()
 
   if [[ -s "$SITES_FILE" ]]; then
     while IFS='|' read -r name path excludes; do
       [[ -z "${name//[[:space:]]/}" || "${name:0:1}" == "#" ]] && continue
+      site_key="$path"
+      [[ -n "${seen_site_paths[$site_key]+x}" ]] && continue
+      seen_site_paths["$site_key"]=1
       backup_site "$name" "$path" "${excludes:-}"
       site_count=$((site_count + 1))
     done < "$SITES_FILE"
-  else
-    log "网站列表为空，跳过网站备份：$SITES_FILE"
+  fi
+
+  if [[ "$AUTO_DISCOVER_SITES" == "1" ]]; then
+    log "自动发现网站目录：$SITE_ROOTS"
+    while IFS='|' read -r name path excludes; do
+      [[ -n "$name" && -n "$path" ]] || continue
+      site_key="$path"
+      [[ -n "${seen_site_paths[$site_key]+x}" ]] && continue
+      seen_site_paths["$site_key"]=1
+      backup_site "$name" "$path" "${excludes:-}"
+      site_count=$((site_count + 1))
+    done < <(discover_sites)
+  fi
+
+  if [[ "$site_count" -eq 0 ]]; then
+    log "未找到可备份网站；可在 $SITES_FILE 添加站点，或设置 SITE_ROOTS"
   fi
 
   if [[ -s "$DATABASES_FILE" ]]; then
     while IFS= read -r db_name; do
       [[ -z "${db_name//[[:space:]]/}" || "${db_name:0:1}" == "#" ]] && continue
+      [[ -n "${seen_databases[$db_name]+x}" ]] && continue
+      seen_databases["$db_name"]=1
       backup_database "$db_name"
       db_count=$((db_count + 1))
     done < "$DATABASES_FILE"
-  else
-    log "数据库列表为空，跳过数据库备份：$DATABASES_FILE"
+  fi
+
+  if [[ "$AUTO_DISCOVER_DATABASES" == "1" ]]; then
+    log "自动发现 MySQL/MariaDB 数据库"
+    while IFS= read -r db_name; do
+      [[ -z "${db_name//[[:space:]]/}" || "${db_name:0:1}" == "#" ]] && continue
+      [[ -n "${seen_databases[$db_name]+x}" ]] && continue
+      seen_databases["$db_name"]=1
+      backup_database "$db_name"
+      db_count=$((db_count + 1))
+    done < <(discover_databases)
+  fi
+
+  if [[ "$db_count" -eq 0 ]]; then
+    log "未找到可备份数据库；可在 $DATABASES_FILE 添加数据库，或检查 MySQL 连接信息"
   fi
 
   log "本次备份结束：网站 ${site_count} 个，数据库 ${db_count} 个，保留 ${KEEP_COPIES} 份"
@@ -786,6 +892,9 @@ print_status() {
   printf '  远程目录：%s\n' "${RCLONE_REMOTE_PATH:-/}"
   printf '  本地目录：%s\n' "$BACKUP_ROOT"
   printf '  保留份数：%s\n' "$KEEP_COPIES"
+  printf '  自动发现网站：%s\n' "$AUTO_DISCOVER_SITES"
+  printf '  网站根目录：%s\n' "$SITE_ROOTS"
+  printf '  自动发现数据库：%s\n' "$AUTO_DISCOVER_DATABASES"
   printf '  定时任务：%s\n' "$CRON_EXPR"
   printf '  网站列表：%s\n' "$SITES_FILE"
   printf '  数据库列表：%s\n' "$DATABASES_FILE"

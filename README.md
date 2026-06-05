@@ -19,6 +19,7 @@ sudo dg menu
 | 云端目标 | 支持满足基础文件操作的 `rclone` remote，例如 Google Drive、OneDrive、Dropbox、S3、WebDAV、SFTP |
 | 网站备份 | 每个站点单独打包成 `.tar.gz.enc` |
 | 数据库备份 | 每个数据库单独导出成 `.sql.gz.enc` |
+| 自动发现 | 立即备份默认扫描常见网站目录，并查询所有非系统数据库 |
 | 加密 | 使用 `openssl aes-256-cbc`，未设置密码时不会上传明文 |
 | 定时 | 写入 root crontab，并可安装 systemd timer 守护 cron |
 | 保留策略 | 每个站点、每个数据库分别保留指定份数 |
@@ -80,6 +81,15 @@ cloud:driveguard/database/数据库名/
 gdrive:backup/site/站点名/
 gdrive:backup/database/数据库名/
 ```
+
+## 自动发现
+
+`sudo dg backup` 默认会自动发现：
+
+- 网站目录：`/www/wwwroot /var/www /srv/www /usr/share/nginx/html`
+- 数据库：MySQL/MariaDB 中除 `information_schema`、`mysql`、`performance_schema`、`sys` 外的数据库
+
+`/etc/driveguard/sites.list` 和 `/etc/driveguard/databases.list` 仍然可用，用来补充特殊网站路径、设置排除项，或显式指定数据库。
 
 ## 常用命令
 
