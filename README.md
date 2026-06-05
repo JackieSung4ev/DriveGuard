@@ -63,6 +63,7 @@ sudo dg install-guard
 | [DriveGuard Wiki](docs/README.md) | 查看所有场景化文档 |
 | [初始配置实战：CentOS Stream 8 + Google Drive](docs/initial-setup-centos-google-drive.md) | 从空服务器一路配置到 `gdrive:backup/site/` 和 `gdrive:backup/database/` |
 | [Google Drive rclone 初始化配置](docs/google-drive-rclone.md) | 理解 Google OAuth、`root_folder_id`、Windows 授权和 `backup` 文件夹 |
+| [恢复备份](docs/restore-backups.md) | 解密 `.enc` 文件，再解压网站或导入数据库 |
 
 ## 备份路径
 
@@ -88,6 +89,7 @@ gdrive:backup/database/数据库名/
 | `sudo dg auth` | 配置或检查 rclone remote |
 | `sudo dg configure` | 配置 remote、远程目录、保留份数、密码和 MySQL |
 | `sudo dg backup` | 立即执行一次备份 |
+| `sudo dg decrypt 源.enc 输出文件` | 解密备份文件，恢复前必须先做这一步 |
 | `sudo dg cron` | 安装或更新 cron 定时任务 |
 | `sudo dg install-guard` | 安装 systemd cron 守护 |
 | `sudo dg status` | 查看当前配置 |
