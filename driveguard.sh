@@ -12,8 +12,10 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/${APP_NAME}}"
 CONFIG_FILE="${CONFIG_FILE:-${CONFIG_DIR}/config.conf}"
 SITES_FILE="${SITES_FILE:-${CONFIG_DIR}/sites.list}"
 DATABASES_FILE="${DATABASES_FILE:-${CONFIG_DIR}/databases.list}"
+POSTGRES_DATABASES_FILE="${POSTGRES_DATABASES_FILE:-${CONFIG_DIR}/postgres.databases.list}"
 ARCHIVE_PASSWORD_FILE="${ARCHIVE_PASSWORD_FILE:-${CONFIG_DIR}/archive.pass}"
 MYSQL_DEFAULTS_FILE="${MYSQL_DEFAULTS_FILE:-${CONFIG_DIR}/mysql.cnf}"
+POSTGRES_PASSFILE="${POSTGRES_PASSFILE:-${CONFIG_DIR}/postgres.pgpass}"
 STATE_DIR="${STATE_DIR:-/var/lib/${APP_NAME}}"
 LOG_DIR="${LOG_DIR:-/var/log/${APP_NAME}}"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/backup.log}"
@@ -34,6 +36,13 @@ MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_SOCKET="${MYSQL_SOCKET:-}"
 MYSQLDUMP_BIN="${MYSQLDUMP_BIN:-}"
 MYSQL_BIN="${MYSQL_BIN:-}"
+POSTGRES_ENABLED="${POSTGRES_ENABLED:-0}"
+POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+POSTGRES_USER="${POSTGRES_USER:-postgres}"
+POSTGRES_DEFAULT_DB="${POSTGRES_DEFAULT_DB:-postgres}"
+PGDUMP_BIN="${PGDUMP_BIN:-}"
+PSQL_BIN="${PSQL_BIN:-}"
 CRON_EXPR="${CRON_EXPR:-0 3 * * *}"
 ENABLE_CRON_GUARD="${ENABLE_CRON_GUARD:-1}"
 
@@ -97,8 +106,10 @@ load_config() {
   fi
   SITES_FILE="${SITES_FILE:-${CONFIG_DIR}/sites.list}"
   DATABASES_FILE="${DATABASES_FILE:-${CONFIG_DIR}/databases.list}"
+  POSTGRES_DATABASES_FILE="${POSTGRES_DATABASES_FILE:-${CONFIG_DIR}/postgres.databases.list}"
   ARCHIVE_PASSWORD_FILE="${ARCHIVE_PASSWORD_FILE:-${CONFIG_DIR}/archive.pass}"
   MYSQL_DEFAULTS_FILE="${MYSQL_DEFAULTS_FILE:-${CONFIG_DIR}/mysql.cnf}"
+  POSTGRES_PASSFILE="${POSTGRES_PASSFILE:-${CONFIG_DIR}/postgres.pgpass}"
   STATE_DIR="${STATE_DIR:-/var/lib/${APP_NAME}}"
   LOG_DIR="${LOG_DIR:-/var/log/${APP_NAME}}"
   LOG_FILE="${LOG_FILE:-${LOG_DIR}/backup.log}"
@@ -118,6 +129,13 @@ load_config() {
   MYSQL_SOCKET="${MYSQL_SOCKET:-}"
   MYSQLDUMP_BIN="${MYSQLDUMP_BIN:-}"
   MYSQL_BIN="${MYSQL_BIN:-}"
+  POSTGRES_ENABLED="${POSTGRES_ENABLED:-0}"
+  POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+  POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+  POSTGRES_USER="${POSTGRES_USER:-postgres}"
+  POSTGRES_DEFAULT_DB="${POSTGRES_DEFAULT_DB:-postgres}"
+  PGDUMP_BIN="${PGDUMP_BIN:-}"
+  PSQL_BIN="${PSQL_BIN:-}"
   CRON_EXPR="${CRON_EXPR:-0 3 * * *}"
   ENABLE_CRON_GUARD="${ENABLE_CRON_GUARD:-1}"
 }
@@ -125,9 +143,9 @@ load_config() {
 ensure_dirs() {
   mkdir -p "$CONFIG_DIR" "$STATE_DIR" "$LOG_DIR" "$BACKUP_ROOT"
   mkdir -p "$BACKUP_ROOT/site" "$BACKUP_ROOT/database" "$BACKUP_ROOT/path"
-  touch "$SITES_FILE" "$DATABASES_FILE" "$LOG_FILE" "$RCLONE_LOG_FILE"
+  touch "$SITES_FILE" "$DATABASES_FILE" "$POSTGRES_DATABASES_FILE" "$LOG_FILE" "$RCLONE_LOG_FILE"
   chmod 700 "$CONFIG_DIR" "$STATE_DIR" "$BACKUP_ROOT" 2>/dev/null || true
-  chmod 600 "$CONFIG_FILE" "$SITES_FILE" "$DATABASES_FILE" "$LOG_FILE" "$RCLONE_LOG_FILE" 2>/dev/null || true
+  chmod 600 "$CONFIG_FILE" "$SITES_FILE" "$DATABASES_FILE" "$POSTGRES_DATABASES_FILE" "$POSTGRES_PASSFILE" "$LOG_FILE" "$RCLONE_LOG_FILE" 2>/dev/null || true
 }
 
 save_config() {
@@ -136,12 +154,14 @@ save_config() {
   {
     printf '# %s 配置文件，生成时间：%s\n' "$DISPLAY_NAME" "$(timestamp)"
     for key in \
-      SITES_FILE DATABASES_FILE ARCHIVE_PASSWORD_FILE MYSQL_DEFAULTS_FILE \
+      SITES_FILE DATABASES_FILE POSTGRES_DATABASES_FILE \
+      ARCHIVE_PASSWORD_FILE MYSQL_DEFAULTS_FILE POSTGRES_PASSFILE \
       STATE_DIR LOG_DIR LOG_FILE RCLONE_LOG_FILE LOCK_FILE \
       UPDATE_REPO_DIR \
       RCLONE_REMOTE RCLONE_REMOTE_PATH RCLONE_CHUNK_SIZE KEEP_COPIES \
       BACKUP_ROOT AUTO_DISCOVER_SITES AUTO_DISCOVER_DATABASES SITE_ROOTS \
       MYSQL_HOST MYSQL_PORT MYSQL_SOCKET MYSQLDUMP_BIN MYSQL_BIN \
+      POSTGRES_ENABLED POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_DEFAULT_DB PGDUMP_BIN PSQL_BIN \
       CRON_EXPR ENABLE_CRON_GUARD
     do
       printf '%s=%q\n' "$key" "${!key}"
@@ -171,6 +191,13 @@ valid_positive_int() {
   [[ "${1:-}" =~ ^[1-9][0-9]*$ ]]
 }
 
+pgpass_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//:/\\:}"
+  printf '%s' "$value"
+}
+
 install_dependencies() {
   require_root
   local distro=""
@@ -195,10 +222,10 @@ install_dependencies() {
 
 install_debian_dependencies() {
   have apt-get || die "未找到 apt-get，当前系统不像 Debian/Ubuntu"
-  log "开始安装依赖：git、rclone、cron、openssl、MySQL 客户端等"
+  log "开始安装依赖：git、rclone、cron、openssl、MySQL/PostgreSQL 客户端等"
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ca-certificates cron git rclone openssl tar gzip util-linux
+    ca-certificates cron git rclone openssl tar gzip util-linux postgresql-client
   if ! have mysqldump && ! have mariadb-dump; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y default-mysql-client \
       || DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-client
@@ -215,8 +242,8 @@ install_rhel_dependencies() {
     die "未找到 dnf/yum，当前系统不像 CentOS/RHEL"
   fi
 
-  log "开始安装依赖：git、rclone、cronie、openssl、MySQL/MariaDB 客户端等"
-  rhel_install_packages "$pkg_mgr" bash ca-certificates cronie git openssl tar gzip util-linux curl unzip mariadb
+  log "开始安装依赖：git、rclone、cronie、openssl、MySQL/MariaDB/PostgreSQL 客户端等"
+  rhel_install_packages "$pkg_mgr" bash ca-certificates cronie git openssl tar gzip util-linux curl unzip mariadb postgresql
 
   if ! have mysqldump && ! have mariadb-dump; then
     rhel_install_packages "$pkg_mgr" mariadb
@@ -409,6 +436,29 @@ configure_mysql_auth() {
   log "MySQL 连接配置已保存到：$MYSQL_DEFAULTS_FILE"
 }
 
+configure_postgres_auth() {
+  require_root
+  load_config
+  ensure_dirs
+  local pg_user pg_pass
+  read -r -p "PostgreSQL 用户 [${POSTGRES_USER}]: " pg_user
+  POSTGRES_USER="${pg_user:-$POSTGRES_USER}"
+  read -r -s -p "PostgreSQL 密码： " pg_pass
+  printf '\n'
+
+  [[ -n "$pg_pass" ]] || die "PostgreSQL 密码不能为空"
+  umask 077
+  printf '%s:%s:*:%s:%s\n' \
+    "$(pgpass_escape "$POSTGRES_HOST")" \
+    "$(pgpass_escape "$POSTGRES_PORT")" \
+    "$(pgpass_escape "$POSTGRES_USER")" \
+    "$(pgpass_escape "$pg_pass")" > "$POSTGRES_PASSFILE"
+  chmod 600 "$POSTGRES_PASSFILE"
+  POSTGRES_ENABLED=1
+  save_config
+  log "PostgreSQL 连接密码已保存到：$POSTGRES_PASSFILE"
+}
+
 configure_general() {
   require_root
   load_config
@@ -443,6 +493,26 @@ configure_general() {
   read -r -p "MySQL socket，留空则使用 host/port [${MYSQL_SOCKET}]: " input
   MYSQL_SOCKET="$input"
 
+  read -r -p "启用 PostgreSQL 备份，1=启用 0=关闭 [${POSTGRES_ENABLED}]: " input
+  if [[ -n "$input" ]]; then
+    [[ "$input" == "0" || "$input" == "1" ]] || die "PostgreSQL 备份开关只能是 0 或 1"
+    POSTGRES_ENABLED="$input"
+  fi
+
+  if [[ "$POSTGRES_ENABLED" == "1" ]]; then
+    read -r -p "PostgreSQL host [${POSTGRES_HOST}]: " input
+    [[ -n "$input" ]] && POSTGRES_HOST="$input"
+
+    read -r -p "PostgreSQL port [${POSTGRES_PORT}]: " input
+    [[ -n "$input" ]] && POSTGRES_PORT="$input"
+
+    read -r -p "PostgreSQL 用户 [${POSTGRES_USER}]: " input
+    [[ -n "$input" ]] && POSTGRES_USER="$input"
+
+    read -r -p "PostgreSQL 连接库 [${POSTGRES_DEFAULT_DB}]: " input
+    [[ -n "$input" ]] && POSTGRES_DEFAULT_DB="$input"
+  fi
+
   save_config
 
   if confirm "是否现在设置备份加密密码"; then
@@ -450,6 +520,9 @@ configure_general() {
   fi
   if confirm "是否现在设置 MySQL 连接信息"; then
     configure_mysql_auth
+  fi
+  if [[ "$POSTGRES_ENABLED" == "1" ]] && confirm "是否现在设置 PostgreSQL 连接密码"; then
+    configure_postgres_auth
   fi
 
   save_config
@@ -490,15 +563,17 @@ add_site_entry() {
 }
 
 add_database_entry() {
+  local file="$1"
+  local label="$2"
   local name tmp
   read -r -p "数据库名称： " name
   [[ -n "$name" ]] || die "数据库名称不能为空"
   tmp="$(mktemp)"
-  grep -v -Fx "$name" "$DATABASES_FILE" > "$tmp" 2>/dev/null || true
+  grep -v -Fx "$name" "$file" > "$tmp" 2>/dev/null || true
   printf '%s\n' "$name" >> "$tmp"
-  mv "$tmp" "$DATABASES_FILE"
-  chmod 600 "$DATABASES_FILE"
-  log "已添加/更新数据库：$name"
+  mv "$tmp" "$file"
+  chmod 600 "$file"
+  log "已添加/更新 ${label} 数据库：$name"
 }
 
 manage_sites_menu() {
@@ -525,14 +600,22 @@ manage_databases_menu() {
   load_config
   ensure_dirs
   while true; do
-    printf '\n数据库备份列表：\n'
+    printf '\nMySQL/MariaDB 数据库备份列表：\n'
     list_file_numbered "$DATABASES_FILE"
-    printf '\n1. 添加/更新数据库\n2. 删除数据库\n0. 返回\n'
+    printf '\nPostgreSQL 数据库备份列表：\n'
+    list_file_numbered "$POSTGRES_DATABASES_FILE"
+    printf '\n1. 添加/更新 MySQL/MariaDB 数据库\n'
+    printf '2. 删除 MySQL/MariaDB 数据库\n'
+    printf '3. 添加/更新 PostgreSQL 数据库\n'
+    printf '4. 删除 PostgreSQL 数据库\n'
+    printf '0. 返回\n'
     local choice
     read -r -p "请选择： " choice
     case "$choice" in
-      1) add_database_entry ;;
+      1) add_database_entry "$DATABASES_FILE" "MySQL/MariaDB" ;;
       2) delete_list_line "$DATABASES_FILE" ;;
+      3) add_database_entry "$POSTGRES_DATABASES_FILE" "PostgreSQL" ;;
+      4) delete_list_line "$POSTGRES_DATABASES_FILE" ;;
       0) return 0 ;;
       *) printf '无效选择\n' ;;
     esac
@@ -563,6 +646,38 @@ mysqldump_supports_no_tablespaces() {
 find_mysql_client_bin() {
   local candidate
   for candidate in "$MYSQL_BIN" mysql mariadb; do
+    [[ -n "$candidate" ]] || continue
+    if [[ "$candidate" == */* && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    if [[ "$candidate" != */* ]] && have "$candidate"; then
+      command -v "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+find_pg_dump_bin() {
+  local candidate
+  for candidate in "$PGDUMP_BIN" pg_dump; do
+    [[ -n "$candidate" ]] || continue
+    if [[ "$candidate" == */* && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    if [[ "$candidate" != */* ]] && have "$candidate"; then
+      command -v "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+find_psql_bin() {
+  local candidate
+  for candidate in "$PSQL_BIN" psql; do
     [[ -n "$candidate" ]] || continue
     if [[ "$candidate" == */* && -x "$candidate" ]]; then
       printf '%s\n' "$candidate"
@@ -621,6 +736,25 @@ discover_databases() {
   printf '%s\n' "$output" \
     | grep -Ev '^(information_schema|mysql|performance_schema|sys)$' \
     | sed '/^[[:space:]]*$/d' || true
+}
+
+discover_postgres_databases() {
+  [[ "$POSTGRES_ENABLED" == "1" ]] || return 0
+  [[ -s "$POSTGRES_PASSFILE" ]] || return 0
+  local psql_bin output
+  psql_bin="$(find_psql_bin)" || {
+    log "未找到 psql，无法自动发现 PostgreSQL 数据库"
+    return 0
+  }
+
+  local query="select datname from pg_database where datallowconn and not datistemplate and datname <> 'postgres' order by datname;"
+  local psql_cmd=("$psql_bin" "-h" "$POSTGRES_HOST" "-p" "$POSTGRES_PORT" "-U" "$POSTGRES_USER" "-d" "$POSTGRES_DEFAULT_DB" "-At" "-c" "$query")
+
+  if ! output="$(PGPASSFILE="$POSTGRES_PASSFILE" "${psql_cmd[@]}" 2>>"$LOG_FILE")"; then
+    log "自动发现 PostgreSQL 数据库失败，请检查连接信息：$POSTGRES_PASSFILE"
+    return 0
+  fi
+  printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' || true
 }
 
 remote_dir_for() {
@@ -754,13 +888,38 @@ backup_database() {
   fi
   dump_cmd+=(--databases "$db_name")
 
-  log "开始备份数据库：$db_name"
+  log "开始备份 MySQL/MariaDB 数据库：$db_name"
   "${dump_cmd[@]}" | gzip -9 > "$tmp_file"
   encrypt_file "$tmp_file" "$final_file"
   rm -f -- "$tmp_file"
   upload_and_prune "$final_file" "database/$safe_name"
   prune_local_dir "$dest_dir" "$KEEP_COPIES"
-  log "数据库备份完成：$db_name -> $final_file"
+  log "MySQL/MariaDB 数据库备份完成：$db_name -> $final_file"
+}
+
+backup_postgres_database() {
+  local db_name="$1"
+  local safe_name ts dest_dir tmp_file final_file dump_bin
+  [[ "$POSTGRES_ENABLED" == "1" ]] || die "PostgreSQL 备份未启用，请先执行配置"
+  [[ -s "$POSTGRES_PASSFILE" ]] || die "未配置 PostgreSQL 连接密码，请先在菜单中设置"
+  dump_bin="$(find_pg_dump_bin)" || die "未找到 pg_dump"
+
+  safe_name="$(sanitize_name "$db_name")"
+  ts="$(date '+%Y%m%d_%H%M%S')"
+  dest_dir="$BACKUP_ROOT/database/postgresql/$safe_name"
+  mkdir -p "$dest_dir"
+  tmp_file="${dest_dir}/Pg_${safe_name}_${ts}.sql.gz"
+  final_file="${tmp_file}.enc"
+
+  local dump_cmd=("$dump_bin" "-h" "$POSTGRES_HOST" "-p" "$POSTGRES_PORT" "-U" "$POSTGRES_USER" "--format=plain" "--no-owner" "--no-privileges" "$db_name")
+
+  log "开始备份 PostgreSQL 数据库：$db_name"
+  PGPASSFILE="$POSTGRES_PASSFILE" "${dump_cmd[@]}" | gzip -9 > "$tmp_file"
+  encrypt_file "$tmp_file" "$final_file"
+  rm -f -- "$tmp_file"
+  upload_and_prune "$final_file" "database/postgresql/$safe_name"
+  prune_local_dir "$dest_dir" "$KEEP_COPIES"
+  log "PostgreSQL 数据库备份完成：$db_name -> $final_file"
 }
 
 backup_all() {
@@ -777,10 +936,12 @@ backup_all() {
   ensure_cron_service || log "提醒：cron 服务检查失败，请手动确认 cron 是否运行"
 
   local site_count=0
-  local db_count=0
+  local mysql_count=0
+  local postgres_count=0
   local name path excludes db_name site_key
   local -A seen_site_paths=()
   local -A seen_databases=()
+  local -A seen_postgres_databases=()
 
   if [[ -s "$SITES_FILE" ]]; then
     while IFS='|' read -r name path excludes; do
@@ -815,7 +976,7 @@ backup_all() {
       [[ -n "${seen_databases[$db_name]+x}" ]] && continue
       seen_databases["$db_name"]=1
       backup_database "$db_name"
-      db_count=$((db_count + 1))
+      mysql_count=$((mysql_count + 1))
     done < "$DATABASES_FILE"
   fi
 
@@ -826,15 +987,40 @@ backup_all() {
       [[ -n "${seen_databases[$db_name]+x}" ]] && continue
       seen_databases["$db_name"]=1
       backup_database "$db_name"
-      db_count=$((db_count + 1))
+      mysql_count=$((mysql_count + 1))
     done < <(discover_databases)
   fi
 
-  if [[ "$db_count" -eq 0 ]]; then
-    log "未找到可备份数据库；可在 $DATABASES_FILE 添加数据库，或检查 MySQL 连接信息"
+  if [[ "$POSTGRES_ENABLED" == "1" ]]; then
+    if [[ -s "$POSTGRES_DATABASES_FILE" ]]; then
+      while IFS= read -r db_name; do
+        [[ -z "${db_name//[[:space:]]/}" || "${db_name:0:1}" == "#" ]] && continue
+        [[ -n "${seen_postgres_databases[$db_name]+x}" ]] && continue
+        seen_postgres_databases["$db_name"]=1
+        backup_postgres_database "$db_name"
+        postgres_count=$((postgres_count + 1))
+      done < "$POSTGRES_DATABASES_FILE"
+    fi
+
+    if [[ "$AUTO_DISCOVER_DATABASES" == "1" ]]; then
+      log "自动发现 PostgreSQL 数据库"
+      while IFS= read -r db_name; do
+        [[ -z "${db_name//[[:space:]]/}" || "${db_name:0:1}" == "#" ]] && continue
+        [[ -n "${seen_postgres_databases[$db_name]+x}" ]] && continue
+        seen_postgres_databases["$db_name"]=1
+        backup_postgres_database "$db_name"
+        postgres_count=$((postgres_count + 1))
+      done < <(discover_postgres_databases)
+    fi
+  elif [[ -s "$POSTGRES_DATABASES_FILE" ]]; then
+    log "PostgreSQL 备份未启用，已跳过：$POSTGRES_DATABASES_FILE"
   fi
 
-  log "本次备份结束：网站 ${site_count} 个，数据库 ${db_count} 个，保留 ${KEEP_COPIES} 份"
+  if [[ "$mysql_count" -eq 0 && "$postgres_count" -eq 0 ]]; then
+    log "未找到可备份数据库；可在 $DATABASES_FILE 或 $POSTGRES_DATABASES_FILE 添加数据库，或检查连接信息"
+  fi
+
+  log "本次备份结束：网站 ${site_count} 个，MySQL/MariaDB 数据库 ${mysql_count} 个，PostgreSQL 数据库 ${postgres_count} 个，保留 ${KEEP_COPIES} 份"
 }
 
 install_cron_entries() {
@@ -1017,11 +1203,14 @@ print_status() {
   printf '  自动发现网站：%s\n' "$AUTO_DISCOVER_SITES"
   printf '  网站根目录：%s\n' "$SITE_ROOTS"
   printf '  自动发现数据库：%s\n' "$AUTO_DISCOVER_DATABASES"
+  printf '  PostgreSQL 备份：%s\n' "$POSTGRES_ENABLED"
   printf '  定时任务：%s\n' "$CRON_EXPR"
   printf '  网站列表：%s\n' "$SITES_FILE"
-  printf '  数据库列表：%s\n' "$DATABASES_FILE"
+  printf '  MySQL/MariaDB 数据库列表：%s\n' "$DATABASES_FILE"
+  printf '  PostgreSQL 数据库列表：%s\n' "$POSTGRES_DATABASES_FILE"
   printf '  密码文件：%s\n' "$ARCHIVE_PASSWORD_FILE"
   printf '  MySQL 配置：%s\n' "$MYSQL_DEFAULTS_FILE"
+  printf '  PostgreSQL 密码文件：%s\n' "$POSTGRES_PASSFILE"
 }
 
 menu() {
@@ -1072,7 +1261,7 @@ usage() {
   $0 update            从 Git 仓库拉取并更新脚本
   $0 install-deps      安装 Debian/Ubuntu/CentOS/RHEL 依赖
   $0 auth              配置/检查 rclone 云盘 remote
-  $0 configure         设置基础配置、密码、MySQL 连接
+  $0 configure         设置基础配置、密码、MySQL/PostgreSQL 连接
   $0 cron              安装/更新 cron 定时任务
   $0 install-guard     安装 systemd cron 守护 timer
   $0 guard-cron        检查并拉起 cron 服务

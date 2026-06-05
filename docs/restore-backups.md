@@ -18,6 +18,7 @@ DriveGuard 上传的文件默认都是加密文件，不能直接用 7-Zip、Win
 ```bash
 sudo dg decrypt /root/Web_test_20260605_033816.tar.gz.enc /root/Web_test_20260605_033816.tar.gz
 sudo dg decrypt /root/Db_example_db_20260605_033816.sql.gz.enc /root/Db_example_db_20260605_033816.sql.gz
+sudo dg decrypt /root/Pg_example_db_20260605_033816.sql.gz.enc /root/Pg_example_db_20260605_033816.sql.gz
 ```
 
 如果要在没有 DriveGuard 的机器上解密，需要使用同样的 OpenSSL 参数，并手动输入当初设置的备份密码：
@@ -65,7 +66,7 @@ tar -xzf /root/Web_test_20260605_033816.tar.gz -C /root/restore-test
 ls -la /root/restore-test
 ```
 
-## 在服务器上恢复数据库备份
+## 在服务器上恢复 MySQL/MariaDB 数据库备份
 
 先解密：
 
@@ -83,6 +84,32 @@ gzip -d /root/Db_example_db_20260605_033816.sql.gz
 
 ```bash
 mysql --defaults-extra-file=/etc/driveguard/mysql.cnf example_db < /root/Db_example_db_20260605_033816.sql
+```
+
+## 在服务器上恢复 PostgreSQL 数据库备份
+
+先解密：
+
+```bash
+sudo dg decrypt /root/Pg_example_db_20260605_033816.sql.gz.enc /root/Pg_example_db_20260605_033816.sql.gz
+```
+
+再解压：
+
+```bash
+gzip -d /root/Pg_example_db_20260605_033816.sql.gz
+```
+
+确保目标库存在：
+
+```bash
+createdb -h localhost -p 5432 -U postgres example_db
+```
+
+导入数据库：
+
+```bash
+PGPASSFILE=/etc/driveguard/postgres.pgpass psql -h localhost -p 5432 -U postgres -d example_db -f /root/Pg_example_db_20260605_033816.sql
 ```
 
 ## 在 Windows 上为什么打不开

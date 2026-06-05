@@ -5,7 +5,7 @@
 ![Encryption](https://img.shields.io/badge/encryption-AES--256--CBC-blue)
 ![Cron](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
-DriveGuard 是一个面向 Linux 服务器的独立云端备份脚本。它通过 `rclone` 连接任意兼容的云盘、对象存储或远程文件系统，并把网站目录、MySQL/MariaDB 数据库加密后定时上传。
+DriveGuard 是一个面向 Linux 服务器的独立云端备份脚本。它通过 `rclone` 连接任意兼容的云盘、对象存储或远程文件系统，并把网站目录、MySQL/MariaDB/PostgreSQL 数据库加密后定时上传。
 
 ```bash
 sudo bash driveguard.sh install
@@ -18,7 +18,7 @@ sudo dg menu
 | --- | --- |
 | 云端目标 | 支持满足基础文件操作的 `rclone` remote，例如 Google Drive、OneDrive、Dropbox、S3、WebDAV、SFTP |
 | 网站备份 | 每个站点单独打包成 `.tar.gz.enc` |
-| 数据库备份 | 当前支持 MySQL/MariaDB，每个数据库单独导出成 `.sql.gz.enc` |
+| 数据库备份 | 支持 MySQL/MariaDB/PostgreSQL，每个数据库单独导出成 `.sql.gz.enc` |
 | 自动发现 | 立即备份默认扫描常见网站目录，并查询所有非系统数据库 |
 | 加密 | 使用 `openssl aes-256-cbc`，未设置密码时不会上传明文 |
 | 定时 | 写入 root crontab，并可安装 systemd timer 守护 cron |
@@ -39,7 +39,7 @@ Debian/Ubuntu、CentOS/RHEL 系可以自动安装依赖：
 sudo dg install-deps
 ```
 
-CentOS/RHEL 系会安装 `git`、`cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip` 和 MariaDB 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。实战步骤见 [CentOS Stream 8 + Google Drive 初始配置](docs/initial-setup-centos-google-drive.md)。
+CentOS/RHEL 系会安装 `git`、`cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip`、MariaDB 客户端和 PostgreSQL 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。实战步骤见 [CentOS Stream 8 + Google Drive 初始配置](docs/initial-setup-centos-google-drive.md)。
 
 首次配置：
 
@@ -73,6 +73,7 @@ DriveGuard 默认 remote 名称是 `cloud`，云端目录是 `driveguard`：
 ```text
 cloud:driveguard/site/站点名/
 cloud:driveguard/database/数据库名/
+cloud:driveguard/database/postgresql/数据库名/
 ```
 
 如果你把 remote 配成 `gdrive`，并在 `dg configure` 里把云端远程目录填成 `backup`，最终会写到：
@@ -80,6 +81,7 @@ cloud:driveguard/database/数据库名/
 ```text
 gdrive:backup/site/站点名/
 gdrive:backup/database/数据库名/
+gdrive:backup/database/postgresql/数据库名/
 ```
 
 ## 自动发现
@@ -87,9 +89,10 @@ gdrive:backup/database/数据库名/
 `sudo dg backup` 默认会自动发现：
 
 - 网站目录：`/www/wwwroot /var/www /srv/www /usr/share/nginx/html`
-- 数据库：MySQL/MariaDB 中除 `information_schema`、`mysql`、`performance_schema`、`sys` 外的数据库
+- MySQL/MariaDB：除 `information_schema`、`mysql`、`performance_schema`、`sys` 外的数据库
+- PostgreSQL：启用后发现非模板库，并默认排除 `postgres`
 
-`/etc/driveguard/sites.list` 和 `/etc/driveguard/databases.list` 仍然可用，用来补充特殊网站路径、设置排除项，或显式指定数据库。
+`/etc/driveguard/sites.list`、`/etc/driveguard/databases.list` 和 `/etc/driveguard/postgres.databases.list` 仍然可用，用来补充特殊网站路径、设置排除项，或显式指定数据库。
 
 ## 常用命令
 
@@ -98,7 +101,7 @@ gdrive:backup/database/数据库名/
 | `sudo dg menu` | 打开中文菜单 |
 | `sudo dg update` | 从 GitHub 拉取并更新脚本 |
 | `sudo dg auth` | 配置或检查 rclone remote |
-| `sudo dg configure` | 配置 remote、远程目录、保留份数、密码和 MySQL |
+| `sudo dg configure` | 配置 remote、远程目录、保留份数、密码和数据库连接 |
 | `sudo dg backup` | 立即执行一次备份 |
 | `sudo dg decrypt 源.enc 输出文件` | 解密备份文件，恢复前必须先做这一步 |
 | `sudo dg cron` | 安装或更新 cron 定时任务 |
@@ -113,8 +116,10 @@ gdrive:backup/database/数据库名/
 /etc/driveguard/config.conf
 /etc/driveguard/sites.list
 /etc/driveguard/databases.list
+/etc/driveguard/postgres.databases.list
 /etc/driveguard/archive.pass
 /etc/driveguard/mysql.cnf
+/etc/driveguard/postgres.pgpass
 ```
 
 本地备份、状态和日志默认在：
@@ -134,7 +139,14 @@ gdrive:backup/database/数据库名/
 example.com|/var/www/example.com|.git,cache,logs
 ```
 
-数据库列表 `/etc/driveguard/databases.list`：
+MySQL/MariaDB 数据库列表 `/etc/driveguard/databases.list`：
+
+```text
+example_db
+blog_db
+```
+
+PostgreSQL 数据库列表 `/etc/driveguard/postgres.databases.list`：
 
 ```text
 example_db
@@ -167,7 +179,8 @@ sudo dg log 200
 | `未设置备份加密密码` | 执行 `sudo dg configure` 并设置密码 |
 | `未配置 MySQL 连接信息` | 只备份网站可忽略；备份数据库需配置 MySQL |
 | `PROCESS privilege` / `dump tablespaces` | 新版脚本会自动对支持的 dump 工具加 `--no-tablespaces`，更新后重试 |
-| PostgreSQL 是否支持 | 暂未支持；当前数据库备份只覆盖 MySQL/MariaDB |
+| `未找到 pg_dump` | 执行 `sudo dg install-deps`，或手动安装 PostgreSQL 客户端 |
+| PostgreSQL 没有备份 | 执行 `sudo dg configure` 启用 PostgreSQL，并设置连接密码 |
 | 上传失败 | 看 `/var/log/driveguard/rclone.log`，并单独测试 `rclone lsd remote:` |
 
 ## 卸载

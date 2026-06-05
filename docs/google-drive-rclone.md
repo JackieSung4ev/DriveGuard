@@ -149,7 +149,7 @@ sudo dg configure
 - `rclone remote 名称`：填 `cloud`，或你的 remote 名称。
 - `云端远程目录`：建议保留 `driveguard`。
 - 设置备份加密密码。
-- 如需数据库备份，设置 MySQL 连接信息。
+- 如需数据库备份，设置 MySQL/MariaDB 或 PostgreSQL 连接信息。
 
 然后执行一次备份测试：
 
