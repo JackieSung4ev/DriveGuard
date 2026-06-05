@@ -164,16 +164,24 @@ install_dependencies() {
 }
 
 ensure_cron_service() {
+  local service_name
   if have systemctl; then
-    systemctl enable cron >/dev/null 2>&1 || true
-    if ! systemctl is-active --quiet cron; then
-      systemctl restart cron >/dev/null 2>&1 || systemctl start cron >/dev/null 2>&1 || return 1
-    fi
+    for service_name in cron crond; do
+      if systemctl list-unit-files "${service_name}.service" >/dev/null 2>&1 || systemctl status "$service_name" >/dev/null 2>&1; then
+        systemctl enable "$service_name" >/dev/null 2>&1 || true
+        if ! systemctl is-active --quiet "$service_name"; then
+          systemctl restart "$service_name" >/dev/null 2>&1 || systemctl start "$service_name" >/dev/null 2>&1 || continue
+        fi
+        systemctl is-active --quiet "$service_name" && return 0
+      fi
+    done
   elif have service; then
-    service cron status >/dev/null 2>&1 || service cron start >/dev/null 2>&1 || return 1
-  else
-    return 1
+    for service_name in cron crond; do
+      service "$service_name" status >/dev/null 2>&1 && return 0
+      service "$service_name" start >/dev/null 2>&1 && return 0
+    done
   fi
+  return 1
 }
 
 install_self() {
@@ -585,6 +593,8 @@ backup_all() {
       backup_site "$name" "$path" "${excludes:-}"
       site_count=$((site_count + 1))
     done < "$SITES_FILE"
+  else
+    log "网站列表为空，跳过网站备份：$SITES_FILE"
   fi
 
   if [[ -s "$DATABASES_FILE" ]]; then
@@ -593,6 +603,8 @@ backup_all() {
       backup_database "$db_name"
       db_count=$((db_count + 1))
     done < "$DATABASES_FILE"
+  else
+    log "数据库列表为空，跳过数据库备份：$DATABASES_FILE"
   fi
 
   log "本次备份结束：网站 ${site_count} 个，数据库 ${db_count} 个，保留 ${KEEP_COPIES} 份"

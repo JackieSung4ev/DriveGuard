@@ -229,6 +229,19 @@ dg menu
 5. 管理数据库备份列表
 ```
 
+注意：`dg configure` 里保存 MySQL 连接信息，只是保存数据库账号密码；不会自动把数据库加入备份列表。必须在菜单 `5` 里添加数据库名，或者手动编辑：
+
+```bash
+nl -ba /etc/driveguard/databases.list
+```
+
+文件里一行一个数据库名，例如：
+
+```text
+example_db
+blog_db
+```
+
 网站会分别上传到：
 
 ```text
