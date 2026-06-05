@@ -311,8 +311,8 @@ sudo dg uninstall
 
 - 移除脚本写入的 root crontab 片段。
 - 停止并删除 systemd cron 守护 service/timer。
-- 删除安装到 `/usr/local/sbin/driveguard` 的脚本副本。
-- 删除短命令 `/usr/local/sbin/dg`。
+- 删除安装到 `/usr/local/bin/driveguard` 的脚本副本。
+- 删除短命令 `/usr/local/bin/dg`。
 
 卸载不会删除 Google Drive 上已上传的备份。
 
