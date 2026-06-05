@@ -39,7 +39,7 @@ Debian/Ubuntu、CentOS/RHEL 系可以自动安装依赖：
 sudo dg install-deps
 ```
 
-CentOS/RHEL 系会安装 `cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip` 和 MariaDB 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。实战步骤见 [CentOS Stream 8 + Google Drive 初始配置](docs/initial-setup-centos-google-drive.md)。
+CentOS/RHEL 系会安装 `git`、`cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip` 和 MariaDB 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。实战步骤见 [CentOS Stream 8 + Google Drive 初始配置](docs/initial-setup-centos-google-drive.md)。
 
 首次配置：
 
@@ -96,6 +96,7 @@ gdrive:backup/database/数据库名/
 | 命令 | 作用 |
 | --- | --- |
 | `sudo dg menu` | 打开中文菜单 |
+| `sudo dg update` | 从 GitHub 拉取并更新脚本 |
 | `sudo dg auth` | 配置或检查 rclone remote |
 | `sudo dg configure` | 配置 remote、远程目录、保留份数、密码和 MySQL |
 | `sudo dg backup` | 立即执行一次备份 |

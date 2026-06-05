@@ -19,6 +19,7 @@ LOG_DIR="${LOG_DIR:-/var/log/${APP_NAME}}"
 LOG_FILE="${LOG_FILE:-${LOG_DIR}/backup.log}"
 RCLONE_LOG_FILE="${RCLONE_LOG_FILE:-${LOG_DIR}/rclone.log}"
 LOCK_FILE="${LOCK_FILE:-${STATE_DIR}/backup.lock}"
+UPDATE_REPO_DIR="${UPDATE_REPO_DIR:-}"
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-cloud}"
 RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
@@ -68,6 +69,27 @@ require_root() {
   fi
 }
 
+current_source_dir() {
+  local src
+  src="$(script_self)"
+  (cd "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)
+}
+
+find_update_repo_dir() {
+  local src_dir
+  if [[ -n "$UPDATE_REPO_DIR" && -d "$UPDATE_REPO_DIR" && -e "$UPDATE_REPO_DIR/.git" ]]; then
+    printf '%s\n' "$UPDATE_REPO_DIR"
+    return 0
+  fi
+
+  src_dir="$(current_source_dir)" || return 1
+  if [[ -e "$src_dir/.git" ]]; then
+    printf '%s\n' "$src_dir"
+    return 0
+  fi
+  return 1
+}
+
 load_config() {
   if [[ -f "$CONFIG_FILE" ]]; then
     # shellcheck source=/dev/null
@@ -82,6 +104,7 @@ load_config() {
   LOG_FILE="${LOG_FILE:-${LOG_DIR}/backup.log}"
   RCLONE_LOG_FILE="${RCLONE_LOG_FILE:-${LOG_DIR}/rclone.log}"
   LOCK_FILE="${LOCK_FILE:-${STATE_DIR}/backup.lock}"
+  UPDATE_REPO_DIR="${UPDATE_REPO_DIR:-}"
   RCLONE_REMOTE="${RCLONE_REMOTE:-cloud}"
   RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
   RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
@@ -115,6 +138,7 @@ save_config() {
     for key in \
       SITES_FILE DATABASES_FILE ARCHIVE_PASSWORD_FILE MYSQL_DEFAULTS_FILE \
       STATE_DIR LOG_DIR LOG_FILE RCLONE_LOG_FILE LOCK_FILE \
+      UPDATE_REPO_DIR \
       RCLONE_REMOTE RCLONE_REMOTE_PATH RCLONE_CHUNK_SIZE KEEP_COPIES \
       BACKUP_ROOT AUTO_DISCOVER_SITES AUTO_DISCOVER_DATABASES SITE_ROOTS \
       MYSQL_HOST MYSQL_PORT MYSQL_SOCKET MYSQLDUMP_BIN MYSQL_BIN \
@@ -171,10 +195,10 @@ install_dependencies() {
 
 install_debian_dependencies() {
   have apt-get || die "未找到 apt-get，当前系统不像 Debian/Ubuntu"
-  log "开始安装依赖：rclone、cron、openssl、MySQL 客户端等"
+  log "开始安装依赖：git、rclone、cron、openssl、MySQL 客户端等"
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ca-certificates cron rclone openssl tar gzip util-linux
+    ca-certificates cron git rclone openssl tar gzip util-linux
   if ! have mysqldump && ! have mariadb-dump; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y default-mysql-client \
       || DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-client
@@ -191,8 +215,8 @@ install_rhel_dependencies() {
     die "未找到 dnf/yum，当前系统不像 CentOS/RHEL"
   fi
 
-  log "开始安装依赖：rclone、cronie、openssl、MySQL/MariaDB 客户端等"
-  rhel_install_packages "$pkg_mgr" bash ca-certificates cronie openssl tar gzip util-linux curl unzip mariadb
+  log "开始安装依赖：git、rclone、cronie、openssl、MySQL/MariaDB 客户端等"
+  rhel_install_packages "$pkg_mgr" bash ca-certificates cronie git openssl tar gzip util-linux curl unzip mariadb
 
   if ! have mysqldump && ! have mariadb-dump; then
     rhel_install_packages "$pkg_mgr" mariadb
@@ -257,8 +281,14 @@ ensure_cron_service() {
 
 install_self() {
   require_root
-  local src
+  load_config
+  local src src_dir
   src="$(script_self)"
+  src_dir="$(current_source_dir)" || src_dir=""
+  if [[ -n "$src_dir" && -e "$src_dir/.git" ]]; then
+    UPDATE_REPO_DIR="$src_dir"
+    save_config
+  fi
   if [[ "$src" != "$INSTALL_PATH" ]]; then
     install -m 700 "$src" "$INSTALL_PATH"
     log "脚本已安装到：$INSTALL_PATH"
@@ -275,6 +305,26 @@ install_self() {
 
 install_cli() {
   install_self
+}
+
+update_self() {
+  require_root
+  load_config
+  have git || die "未找到 git，请先执行：$SHORT_APP_NAME install-deps，或手动安装 git"
+
+  local repo_dir script_path
+  repo_dir="$(find_update_repo_dir)" || die "未找到源码仓库路径，请进入 DriveGuard 仓库执行：git pull && bash driveguard.sh install"
+  script_path="${repo_dir}/driveguard.sh"
+  [[ -f "$script_path" ]] || die "源码仓库中未找到脚本：$script_path"
+
+  log "开始更新源码仓库：$repo_dir"
+  git -C "$repo_dir" pull --ff-only
+
+  [[ -f "$script_path" ]] || die "更新后未找到脚本：$script_path"
+  UPDATE_REPO_DIR="$repo_dir"
+  save_config
+  bash "$script_path" install
+  log "脚本已更新到最新版本"
 }
 
 check_rclone_remote() {
@@ -950,6 +1000,7 @@ print_status() {
   ensure_dirs
   printf '\n当前配置：\n'
   printf '  配置文件：%s\n' "$CONFIG_FILE"
+  printf '  更新仓库：%s\n' "${UPDATE_REPO_DIR:-未记录}"
   printf '  rclone remote：%s:\n' "$RCLONE_REMOTE"
   printf '  远程目录：%s\n' "${RCLONE_REMOTE_PATH:-/}"
   printf '  本地目录：%s\n' "$BACKUP_ROOT"
@@ -980,7 +1031,8 @@ menu() {
     printf '8. 立即执行一次备份\n'
     printf '9. 查看日志\n'
     printf '10. 查看当前配置\n'
-    printf '11. 卸载脚本和定时守护\n'
+    printf '11. 更新 DriveGuard 脚本\n'
+    printf '12. 卸载脚本和定时守护\n'
     printf '0. 退出\n'
     local choice
     read -r -p "请选择： " choice
@@ -995,7 +1047,8 @@ menu() {
       8) backup_all; pause_enter ;;
       9) show_logs; pause_enter ;;
       10) print_status; pause_enter ;;
-      11) uninstall_app; pause_enter ;;
+      11) update_self; pause_enter ;;
+      12) uninstall_app; pause_enter ;;
       0) exit 0 ;;
       *) printf '无效选择\n' ;;
     esac
@@ -1007,6 +1060,7 @@ usage() {
 用法：
   $0 menu              打开中文交互菜单
   $0 install           安装/更新 driveguard 和 dg 短命令
+  $0 update            从 Git 仓库拉取并更新脚本
   $0 install-deps      安装 Debian/Ubuntu/CentOS/RHEL 依赖
   $0 auth              配置/检查 rclone 云盘 remote
   $0 configure         设置基础配置、密码、MySQL 连接
@@ -1028,6 +1082,7 @@ main() {
   case "$cmd" in
     menu) menu ;;
     install) install_cli ;;
+    update) update_self ;;
     install-deps) install_dependencies ;;
     auth) configure_rclone_remote ;;
     configure) configure_general ;;

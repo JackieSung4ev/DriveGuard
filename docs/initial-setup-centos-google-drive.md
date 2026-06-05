@@ -47,7 +47,7 @@ dg help
 dg install-deps
 ```
 
-它会安装 `cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip` 和 MariaDB 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。
+它会安装 `git`、`cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip` 和 MariaDB 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。
 
 如果遇到第三方源元数据错误，例如 Cloudflare repo 404，可以临时禁用坏源后重试：
 
@@ -286,5 +286,6 @@ systemctl status driveguard-cron-guard.timer
 
 - 网站和数据库都会加密，文件后缀分别是 `.tar.gz.enc` 和 `.sql.gz.enc`。
 - 多个网站和数据库会分别备份、分别上传、分别按保留份数清理。
+- 以后更新 DriveGuard，可以直接执行 `dg update`，或在 `dg menu` 中选择“更新 DriveGuard 脚本”。
 - `root_folder_id` 是限制 remote 根目录用的；只想写到 `backup/` 时，更简单的是在 `dg configure` 里把云端远程目录填 `backup`。
 - 自建 Google OAuth Client 的 token 和 refresh token 都是敏感信息，不要公开。
