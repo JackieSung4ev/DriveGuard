@@ -166,6 +166,7 @@ sudo dg log 200
 | `rclone remote 不存在` | remote 名称和 `sudo dg configure` 里的名称不一致 |
 | `未设置备份加密密码` | 执行 `sudo dg configure` 并设置密码 |
 | `未配置 MySQL 连接信息` | 只备份网站可忽略；备份数据库需配置 MySQL |
+| `PROCESS privilege` / `dump tablespaces` | 新版脚本会自动对支持的 dump 工具加 `--no-tablespaces`，更新后重试 |
 | 上传失败 | 看 `/var/log/driveguard/rclone.log`，并单独测试 `rclone lsd remote:` |
 
 ## 卸载

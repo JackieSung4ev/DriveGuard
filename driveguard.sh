@@ -555,6 +555,11 @@ find_mysqldump_bin() {
   return 1
 }
 
+mysqldump_supports_no_tablespaces() {
+  local dump_bin="$1"
+  "$dump_bin" --help 2>/dev/null | grep -q -- '--no-tablespaces'
+}
+
 find_mysql_client_bin() {
   local candidate
   for candidate in "$MYSQL_BIN" mysql mariadb; do
@@ -743,7 +748,11 @@ backup_database() {
   else
     dump_cmd+=("--host=$MYSQL_HOST" "--port=$MYSQL_PORT")
   fi
-  dump_cmd+=(--single-transaction --quick --routines --events --triggers --hex-blob --databases "$db_name")
+  dump_cmd+=(--single-transaction --quick --routines --events --triggers --hex-blob)
+  if mysqldump_supports_no_tablespaces "$dump_bin"; then
+    dump_cmd+=(--no-tablespaces)
+  fi
+  dump_cmd+=(--databases "$db_name")
 
   log "开始备份数据库：$db_name"
   "${dump_cmd[@]}" | gzip -9 > "$tmp_file"
