@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-APP_NAME="gdrive-backup-guard"
-LEGACY_APP_NAMES=("bt-gdrive-backup")
-CRON_MARKER_BEGIN="# GDRIVE_BACKUP_GUARD_BEGIN"
-CRON_MARKER_END="# GDRIVE_BACKUP_GUARD_END"
-LEGACY_CRON_MARKER_BEGIN="# BT_GDRIVE_BACKUP_BEGIN"
-LEGACY_CRON_MARKER_END="# BT_GDRIVE_BACKUP_END"
+APP_NAME="driveguard"
+DISPLAY_NAME="DriveGuard"
+SHORT_APP_NAME="dg"
+CRON_MARKER_BEGIN="# DRIVEGUARD_BEGIN"
+CRON_MARKER_END="# DRIVEGUARD_END"
 INSTALL_PATH="/usr/local/sbin/${APP_NAME}"
+SHORT_INSTALL_PATH="/usr/local/sbin/${SHORT_APP_NAME}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/${APP_NAME}}"
 CONFIG_FILE="${CONFIG_FILE:-${CONFIG_DIR}/config.conf}"
 SITES_FILE="${SITES_FILE:-${CONFIG_DIR}/sites.list}"
@@ -21,7 +21,7 @@ RCLONE_LOG_FILE="${RCLONE_LOG_FILE:-${LOG_DIR}/rclone.log}"
 LOCK_FILE="${LOCK_FILE:-${STATE_DIR}/backup.lock}"
 
 RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
-RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-bt_backup}"
+RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
 RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
 KEEP_COPIES="${KEEP_COPIES:-7}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/${APP_NAME}}"
@@ -79,7 +79,7 @@ load_config() {
   RCLONE_LOG_FILE="${RCLONE_LOG_FILE:-${LOG_DIR}/rclone.log}"
   LOCK_FILE="${LOCK_FILE:-${STATE_DIR}/backup.lock}"
   RCLONE_REMOTE="${RCLONE_REMOTE:-gdrive}"
-  RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-bt_backup}"
+  RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
   RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
   KEEP_COPIES="${KEEP_COPIES:-7}"
   BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/${APP_NAME}}"
@@ -103,7 +103,7 @@ save_config() {
   ensure_dirs
   umask 077
   {
-    printf '# %s 配置文件，生成时间：%s\n' "$APP_NAME" "$(timestamp)"
+    printf '# %s 配置文件，生成时间：%s\n' "$DISPLAY_NAME" "$(timestamp)"
     for key in \
       SITES_FILE DATABASES_FILE ARCHIVE_PASSWORD_FILE MYSQL_DEFAULTS_FILE \
       STATE_DIR LOG_DIR LOG_FILE RCLONE_LOG_FILE LOCK_FILE \
@@ -150,11 +150,11 @@ install_dependencies() {
   fi
   have apt-get || die "未找到 apt-get，当前系统不像 Debian/Ubuntu"
 
-  log "开始安装依赖：rclone、cron、openssl、sqlite3、MySQL 客户端等"
+  log "开始安装依赖：rclone、cron、openssl、MySQL 客户端等"
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ca-certificates cron rclone openssl tar gzip util-linux sqlite3
-  if ! have mysqldump && ! have mariadb-dump && [[ ! -x /www/server/mysql/bin/mysqldump ]]; then
+    ca-certificates cron rclone openssl tar gzip util-linux
+  if ! have mysqldump && ! have mariadb-dump; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y default-mysql-client \
       || DEBIAN_FRONTEND=noninteractive apt-get install -y mariadb-client
   fi
@@ -186,6 +186,16 @@ install_self() {
   else
     chmod 700 "$INSTALL_PATH" 2>/dev/null || true
   fi
+  if have ln; then
+    ln -sfn "$INSTALL_PATH" "$SHORT_INSTALL_PATH"
+  else
+    install -m 700 "$INSTALL_PATH" "$SHORT_INSTALL_PATH"
+  fi
+  log "短命令已安装：${APP_NAME}、${SHORT_APP_NAME}"
+}
+
+install_cli() {
+  install_self
 }
 
 check_gdrive_auth() {
@@ -253,26 +263,11 @@ configure_mysql_auth() {
   require_root
   load_config
   ensure_dirs
-  local mysql_user mysql_pass bt_db bt_pass
-  bt_db="/www/server/panel/data/default.db"
-
-  if [[ -r "$bt_db" ]] && have sqlite3; then
-    bt_pass="$(sqlite3 "$bt_db" "select mysql_root from config where id=1;" 2>/dev/null || true)"
-    if [[ -n "$bt_pass" ]] && confirm "检测到宝塔 MySQL root 密码，是否直接使用"; then
-      mysql_user="root"
-      mysql_pass="$bt_pass"
-    else
-      read -r -p "MySQL 用户 [root]: " mysql_user
-      mysql_user="${mysql_user:-root}"
-      read -r -s -p "MySQL 密码： " mysql_pass
-      printf '\n'
-    fi
-  else
-    read -r -p "MySQL 用户 [root]: " mysql_user
-    mysql_user="${mysql_user:-root}"
-    read -r -s -p "MySQL 密码： " mysql_pass
-    printf '\n'
-  fi
+  local mysql_user mysql_pass
+  read -r -p "MySQL 用户 [root]: " mysql_user
+  mysql_user="${mysql_user:-root}"
+  read -r -s -p "MySQL 密码： " mysql_pass
+  printf '\n'
 
   [[ -n "$mysql_pass" ]] || die "MySQL 密码不能为空"
   umask 077
@@ -377,24 +372,6 @@ add_database_entry() {
   log "已添加/更新数据库：$name"
 }
 
-import_from_bt_panel() {
-  require_root
-  load_config
-  ensure_dirs
-  local bt_db="/www/server/panel/data/default.db"
-  [[ -r "$bt_db" ]] || die "未找到宝塔面板数据库：$bt_db"
-  have sqlite3 || die "未找到 sqlite3，请先安装依赖"
-
-  if [[ -s "$SITES_FILE" || -s "$DATABASES_FILE" ]]; then
-    confirm "导入会覆盖当前站点/数据库列表，是否继续" || return 0
-  fi
-
-  sqlite3 -separator '|' "$bt_db" "select name,path,'' from sites where path <> '';" > "$SITES_FILE"
-  sqlite3 "$bt_db" "select name from databases where name not in ('information_schema','mysql','performance_schema','sys');" > "$DATABASES_FILE"
-  chmod 600 "$SITES_FILE" "$DATABASES_FILE"
-  log "已从宝塔导入站点和数据库列表"
-}
-
 manage_sites_menu() {
   require_root
   load_config
@@ -402,13 +379,12 @@ manage_sites_menu() {
   while true; do
     printf '\n网站备份列表：\n'
     list_file_numbered "$SITES_FILE"
-    printf '\n1. 添加/更新网站\n2. 删除网站\n3. 从宝塔导入\n0. 返回\n'
+    printf '\n1. 添加/更新网站\n2. 删除网站\n0. 返回\n'
     local choice
     read -r -p "请选择： " choice
     case "$choice" in
       1) add_site_entry ;;
       2) delete_list_line "$SITES_FILE" ;;
-      3) import_from_bt_panel ;;
       0) return 0 ;;
       *) printf '无效选择\n' ;;
     esac
@@ -422,13 +398,12 @@ manage_databases_menu() {
   while true; do
     printf '\n数据库备份列表：\n'
     list_file_numbered "$DATABASES_FILE"
-    printf '\n1. 添加/更新数据库\n2. 删除数据库\n3. 从宝塔导入\n0. 返回\n'
+    printf '\n1. 添加/更新数据库\n2. 删除数据库\n0. 返回\n'
     local choice
     read -r -p "请选择： " choice
     case "$choice" in
       1) add_database_entry ;;
       2) delete_list_line "$DATABASES_FILE" ;;
-      3) import_from_bt_panel ;;
       0) return 0 ;;
       *) printf '无效选择\n' ;;
     esac
@@ -437,7 +412,7 @@ manage_databases_menu() {
 
 find_mysqldump_bin() {
   local candidate
-  for candidate in "$MYSQLDUMP_BIN" /www/server/mysql/bin/mysqldump mysqldump mariadb-dump; do
+  for candidate in "$MYSQLDUMP_BIN" mysqldump mariadb-dump; do
     [[ -n "$candidate" ]] || continue
     if [[ "$candidate" == */* && -x "$candidate" ]]; then
       printf '%s\n' "$candidate"
@@ -633,9 +608,7 @@ install_cron_entries() {
   local tmp
   tmp="$(mktemp)"
   crontab -l 2>/dev/null \
-    | sed \
-      -e "/${CRON_MARKER_BEGIN}/,/${CRON_MARKER_END}/d" \
-      -e "/${LEGACY_CRON_MARKER_BEGIN}/,/${LEGACY_CRON_MARKER_END}/d" > "$tmp" || true
+    | sed -e "/${CRON_MARKER_BEGIN}/,/${CRON_MARKER_END}/d" > "$tmp" || true
   {
     printf '%s\n' "$CRON_MARKER_BEGIN"
     printf 'SHELL=/bin/bash\n'
@@ -706,9 +679,7 @@ remove_cron_entries() {
   local tmp
   tmp="$(mktemp)"
   crontab -l 2>/dev/null \
-    | sed \
-      -e "/${CRON_MARKER_BEGIN}/,/${CRON_MARKER_END}/d" \
-      -e "/${LEGACY_CRON_MARKER_BEGIN}/,/${LEGACY_CRON_MARKER_END}/d" > "$tmp" || true
+    | sed -e "/${CRON_MARKER_BEGIN}/,/${CRON_MARKER_END}/d" > "$tmp" || true
   crontab "$tmp"
   rm -f "$tmp"
   log "已移除 cron 定时任务"
@@ -720,14 +691,11 @@ remove_systemd_guard() {
     return 0
   fi
 
-  local app
-  for app in "$APP_NAME" "${LEGACY_APP_NAMES[@]}"; do
-    systemctl disable --now "${app}-cron-guard.timer" >/dev/null 2>&1 || true
-    systemctl stop "${app}-cron-guard.service" >/dev/null 2>&1 || true
-    rm -f \
-      "/etc/systemd/system/${app}-cron-guard.service" \
-      "/etc/systemd/system/${app}-cron-guard.timer"
-  done
+  systemctl disable --now "${APP_NAME}-cron-guard.timer" >/dev/null 2>&1 || true
+  systemctl stop "${APP_NAME}-cron-guard.service" >/dev/null 2>&1 || true
+  rm -f \
+    "/etc/systemd/system/${APP_NAME}-cron-guard.service" \
+    "/etc/systemd/system/${APP_NAME}-cron-guard.timer"
   systemctl daemon-reload >/dev/null 2>&1 || true
   log "已移除 systemd cron 守护"
 }
@@ -762,7 +730,7 @@ uninstall_app() {
   printf '  - 会移除本脚本安装的 systemd cron 守护。\n'
   printf '  - 不会删除 Google Drive 上已上传的备份。\n'
   printf '  - 配置、密码、日志、本地备份目录会逐项询问后再删除。\n\n'
-  confirm "确认开始卸载 ${APP_NAME}" || return 0
+  confirm "确认开始卸载 ${DISPLAY_NAME}" || return 0
 
   remove_cron_entries
   remove_systemd_guard
@@ -771,25 +739,16 @@ uninstall_app() {
   remove_path_if_confirmed "本地备份暂存目录" "$BACKUP_ROOT"
   remove_path_if_confirmed "状态目录" "$STATE_DIR"
   remove_path_if_confirmed "日志目录" "$LOG_DIR"
-  remove_path_if_confirmed "旧配置和密钥目录" "/etc/bt-gdrive-backup"
-  remove_path_if_confirmed "旧本地备份暂存目录" "/var/backups/bt-gdrive-backup"
-  remove_path_if_confirmed "旧状态目录" "/var/lib/bt-gdrive-backup"
-  remove_path_if_confirmed "旧日志目录" "/var/log/bt-gdrive-backup"
-
   local current_script
-  local legacy_app
   current_script="$(script_self)"
   if [[ -e "$INSTALL_PATH" ]]; then
     rm -f -- "$INSTALL_PATH"
     log "已删除安装脚本：$INSTALL_PATH"
   fi
-  for legacy_app in "${LEGACY_APP_NAMES[@]}"; do
-    if [[ -e "/usr/local/sbin/${legacy_app}" ]]; then
-      rm -f -- "/usr/local/sbin/${legacy_app}"
-      log "已删除旧安装脚本：/usr/local/sbin/${legacy_app}"
-    fi
-  done
-
+  if [[ -L "$SHORT_INSTALL_PATH" || -e "$SHORT_INSTALL_PATH" ]]; then
+    rm -f -- "$SHORT_INSTALL_PATH"
+    log "已删除短命令：$SHORT_INSTALL_PATH"
+  fi
   if [[ "$current_script" != "$INSTALL_PATH" ]]; then
     log "当前运行脚本未删除：$current_script"
   fi
@@ -827,7 +786,7 @@ menu() {
   load_config
   ensure_dirs
   while true; do
-    printf '\n%s 中文管理菜单\n' "$APP_NAME"
+    printf '\n%s 中文管理菜单\n' "$DISPLAY_NAME"
     printf '1. 安装/检查依赖\n'
     printf '2. Google Drive 授权/检查\n'
     printf '3. 基础配置和密码\n'
@@ -864,10 +823,10 @@ usage() {
   cat <<EOF
 用法：
   $0 menu              打开中文交互菜单
+  $0 install           安装/更新 driveguard 和 dg 短命令
   $0 install-deps      安装 Debian/Ubuntu 依赖
   $0 auth              配置/检查 Google Drive 授权
   $0 configure         设置基础配置、密码、MySQL 连接
-  $0 import-bt         从宝塔面板导入站点和数据库列表
   $0 cron              安装/更新 cron 定时任务
   $0 install-guard     安装 systemd cron 守护 timer
   $0 guard-cron        检查并拉起 cron 服务
@@ -885,10 +844,10 @@ main() {
   local cmd="${1:-menu}"
   case "$cmd" in
     menu) menu ;;
+    install) install_cli ;;
     install-deps) install_dependencies ;;
     auth) authorize_gdrive ;;
     configure) configure_general ;;
-    import-bt) import_from_bt_panel ;;
     cron) install_cron_entries ;;
     install-guard) install_systemd_guard ;;
     guard-cron) guard_cron ;;

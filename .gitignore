@@ -20,7 +20,7 @@ logs/
 *.enc
 backup/
 backups/
-bt_backup/
+driveguard/
 
 # Temporary files
 *.tmp
