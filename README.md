@@ -90,7 +90,7 @@ gdrive:backup/database/postgresql/数据库名/
 
 - 网站目录：`/www/wwwroot /var/www /srv/www /usr/share/nginx/html`
 - MySQL/MariaDB：除 `information_schema`、`mysql`、`performance_schema`、`sys` 外的数据库
-- PostgreSQL：启用后发现非模板库，并默认排除 `postgres`
+- PostgreSQL：默认 `auto` 自动检测本机 PostgreSQL，启用后发现非模板库，并默认排除 `postgres`
 
 `/etc/driveguard/sites.list`、`/etc/driveguard/databases.list` 和 `/etc/driveguard/postgres.databases.list` 仍然可用，用来补充特殊网站路径、设置排除项，或显式指定数据库。
 
@@ -180,7 +180,7 @@ sudo dg log 200
 | `未配置 MySQL 连接信息` | 只备份网站可忽略；备份数据库需配置 MySQL |
 | `PROCESS privilege` / `dump tablespaces` | 新版脚本会自动对支持的 dump 工具加 `--no-tablespaces`，更新后重试 |
 | `未找到 pg_dump` | 执行 `sudo dg install-deps`，或手动安装 PostgreSQL 客户端 |
-| PostgreSQL 没有备份 | 执行 `sudo dg configure` 启用 PostgreSQL，并设置连接密码 |
+| PostgreSQL 没有备份 | 本机 PostgreSQL 默认自动检测；远程库请在 `sudo dg configure` 中填 `1` 强制启用，并设置连接密码 |
 | 上传失败 | 看 `/var/log/driveguard/rclone.log`，并单独测试 `rclone lsd remote:` |
 
 ## 卸载

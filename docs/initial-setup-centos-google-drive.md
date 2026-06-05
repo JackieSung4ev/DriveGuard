@@ -204,14 +204,14 @@ rclone remote 名称 [cloud]: gdrive
 MySQL host [localhost]: 直接回车
 MySQL port [3306]: 直接回车
 MySQL socket，留空则使用 host/port: 直接回车
-启用 PostgreSQL 备份，1=启用 0=关闭 [0]: 有 PostgreSQL 就填 1
+PostgreSQL 备份，auto=自动检测 1=启用 0=关闭 [auto]: 本机 PostgreSQL 直接回车；远程 PostgreSQL 填 1；不备份填 0
 PostgreSQL host [localhost]: 直接回车或填写实际地址
 PostgreSQL port [5432]: 直接回车
 PostgreSQL 用户 [postgres]: 填写备份用户
 PostgreSQL 连接库 [postgres]: 直接回车
 是否现在设置备份加密密码: y
 是否现在设置 MySQL 连接信息: 需要备份数据库就 y
-是否现在设置 PostgreSQL 连接密码: 已启用 PostgreSQL 就 y
+是否现在设置 PostgreSQL 连接密码: 已检测到或已启用 PostgreSQL 就 y
 ```
 
 配置完成后会生成：
@@ -238,7 +238,7 @@ dg menu
 5. 管理数据库备份列表
 ```
 
-`dg backup` 默认会自动发现常见网站目录、MySQL/MariaDB 非系统数据库，以及已启用 PostgreSQL 后的非模板库。菜单里的列表仍然有用：可以补充特殊网站路径、设置网站排除项，或显式指定数据库。
+`dg backup` 默认会自动发现常见网站目录、MySQL/MariaDB 非系统数据库，以及自动检测到或已启用 PostgreSQL 后的非模板库。菜单里的列表仍然有用：可以补充特殊网站路径、设置网站排除项，或显式指定数据库。
 
 如果你想检查或手动维护 MySQL/MariaDB 数据库列表：
 

@@ -36,7 +36,7 @@ MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_SOCKET="${MYSQL_SOCKET:-}"
 MYSQLDUMP_BIN="${MYSQLDUMP_BIN:-}"
 MYSQL_BIN="${MYSQL_BIN:-}"
-POSTGRES_ENABLED="${POSTGRES_ENABLED:-0}"
+POSTGRES_ENABLED="${POSTGRES_ENABLED:-auto}"
 POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
 POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 POSTGRES_USER="${POSTGRES_USER:-postgres}"
@@ -129,7 +129,7 @@ load_config() {
   MYSQL_SOCKET="${MYSQL_SOCKET:-}"
   MYSQLDUMP_BIN="${MYSQLDUMP_BIN:-}"
   MYSQL_BIN="${MYSQL_BIN:-}"
-  POSTGRES_ENABLED="${POSTGRES_ENABLED:-0}"
+  POSTGRES_ENABLED="${POSTGRES_ENABLED:-auto}"
   POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
   POSTGRES_PORT="${POSTGRES_PORT:-5432}"
   POSTGRES_USER="${POSTGRES_USER:-postgres}"
@@ -493,13 +493,13 @@ configure_general() {
   read -r -p "MySQL socket，留空则使用 host/port [${MYSQL_SOCKET}]: " input
   MYSQL_SOCKET="$input"
 
-  read -r -p "启用 PostgreSQL 备份，1=启用 0=关闭 [${POSTGRES_ENABLED}]: " input
+  read -r -p "PostgreSQL 备份，auto=自动检测 1=启用 0=关闭 [${POSTGRES_ENABLED}]: " input
   if [[ -n "$input" ]]; then
-    [[ "$input" == "0" || "$input" == "1" ]] || die "PostgreSQL 备份开关只能是 0 或 1"
+    [[ "$input" == "auto" || "$input" == "0" || "$input" == "1" ]] || die "PostgreSQL 备份只能填写 auto、0 或 1"
     POSTGRES_ENABLED="$input"
   fi
 
-  if [[ "$POSTGRES_ENABLED" == "1" ]]; then
+  if postgres_backup_enabled; then
     read -r -p "PostgreSQL host [${POSTGRES_HOST}]: " input
     [[ -n "$input" ]] && POSTGRES_HOST="$input"
 
@@ -521,7 +521,7 @@ configure_general() {
   if confirm "是否现在设置 MySQL 连接信息"; then
     configure_mysql_auth
   fi
-  if [[ "$POSTGRES_ENABLED" == "1" ]] && confirm "是否现在设置 PostgreSQL 连接密码"; then
+  if postgres_backup_enabled && confirm "是否现在设置 PostgreSQL 连接密码"; then
     configure_postgres_auth
   fi
 
@@ -691,6 +691,40 @@ find_psql_bin() {
   return 1
 }
 
+postgres_detected() {
+  if have pg_isready && pg_isready -h "$POSTGRES_HOST" -p "$POSTGRES_PORT" -q >/dev/null 2>&1; then
+    return 0
+  fi
+  if [[ "$POSTGRES_HOST" == "localhost" || "$POSTGRES_HOST" == "127.0.0.1" || "$POSTGRES_HOST" == "::1" ]]; then
+    [[ -S "/var/run/postgresql/.s.PGSQL.${POSTGRES_PORT}" || -S "/tmp/.s.PGSQL.${POSTGRES_PORT}" ]] && return 0
+  fi
+  return 1
+}
+
+postgres_backup_enabled() {
+  case "$POSTGRES_ENABLED" in
+    1|yes|true|on) return 0 ;;
+    0|no|false|off) return 1 ;;
+    auto|"") postgres_detected ;;
+    *) return 1 ;;
+  esac
+}
+
+postgres_status_label() {
+  case "$POSTGRES_ENABLED" in
+    auto|"")
+      if postgres_detected; then
+        printf 'auto（已检测到）'
+      else
+        printf 'auto（未检测到）'
+      fi
+      ;;
+    1|yes|true|on) printf '1（已启用）' ;;
+    0|no|false|off) printf '0（已关闭）' ;;
+    *) printf '%s' "$POSTGRES_ENABLED" ;;
+  esac
+}
+
 discover_sites() {
   local root child found name
   for root in $SITE_ROOTS; do
@@ -739,7 +773,7 @@ discover_databases() {
 }
 
 discover_postgres_databases() {
-  [[ "$POSTGRES_ENABLED" == "1" ]] || return 0
+  postgres_backup_enabled || return 0
   [[ -s "$POSTGRES_PASSFILE" ]] || return 0
   local psql_bin output
   psql_bin="$(find_psql_bin)" || {
@@ -900,7 +934,7 @@ backup_database() {
 backup_postgres_database() {
   local db_name="$1"
   local safe_name ts dest_dir tmp_file final_file dump_bin
-  [[ "$POSTGRES_ENABLED" == "1" ]] || die "PostgreSQL 备份未启用，请先执行配置"
+  postgres_backup_enabled || die "PostgreSQL 备份未启用或未检测到 PostgreSQL，请先执行配置"
   [[ -s "$POSTGRES_PASSFILE" ]] || die "未配置 PostgreSQL 连接密码，请先在菜单中设置"
   dump_bin="$(find_pg_dump_bin)" || die "未找到 pg_dump"
 
@@ -991,7 +1025,9 @@ backup_all() {
     done < <(discover_databases)
   fi
 
-  if [[ "$POSTGRES_ENABLED" == "1" ]]; then
+  if postgres_backup_enabled && [[ ! -s "$POSTGRES_PASSFILE" ]]; then
+    log "已检测到或已启用 PostgreSQL，但未配置连接密码，跳过 PostgreSQL 备份；请执行 dg configure 设置"
+  elif postgres_backup_enabled; then
     if [[ -s "$POSTGRES_DATABASES_FILE" ]]; then
       while IFS= read -r db_name; do
         [[ -z "${db_name//[[:space:]]/}" || "${db_name:0:1}" == "#" ]] && continue
@@ -1203,7 +1239,7 @@ print_status() {
   printf '  自动发现网站：%s\n' "$AUTO_DISCOVER_SITES"
   printf '  网站根目录：%s\n' "$SITE_ROOTS"
   printf '  自动发现数据库：%s\n' "$AUTO_DISCOVER_DATABASES"
-  printf '  PostgreSQL 备份：%s\n' "$POSTGRES_ENABLED"
+  printf '  PostgreSQL 备份：%s\n' "$(postgres_status_label)"
   printf '  定时任务：%s\n' "$CRON_EXPR"
   printf '  网站列表：%s\n' "$SITES_FILE"
   printf '  MySQL/MariaDB 数据库列表：%s\n' "$DATABASES_FILE"
