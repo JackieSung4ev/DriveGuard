@@ -1,23 +1,24 @@
 # DriveGuard Wiki
 
-这里存放 DriveGuard 的场景化操作文档。项目首页 README 只保留能力概览、快速开始和常用命令；具体配置、授权、恢复和排障步骤都沉淀在这里。
+This folder contains task-oriented DriveGuard documentation. The root README stays focused on the project overview, quick start, and common commands; detailed setup, authorization, restore, and troubleshooting steps live here.
 
-## 文档列表
+## Documents
 
-| 文档 | 适用场景 |
+| Document | Use case |
 | --- | --- |
-| [初始配置实战：CentOS Stream 8 + Google Drive](initial-setup-centos-google-drive.md) | 从空服务器开始安装依赖、处理 Google OAuth、配置数据库连接并完成首次备份 |
-| [Google Drive rclone 初始化配置](google-drive-rclone.md) | 单独理解 Google Drive remote、`root_folder_id`、授权 token 和 `backup` 文件夹 |
-| [恢复备份](restore-backups.md) | 下载 `.enc` 后的服务器/Windows 解密命令、网站解压、MySQL/PostgreSQL 导入 |
+| [CentOS Stream 8 + Google Drive setup](initial-setup-centos-google-drive.md) | Install dependencies, configure Google OAuth, set up database connections, and run the first backup |
+| [Google Drive rclone setup](google-drive-rclone.md) | Understand Google Drive remotes, `root_folder_id`, authorization tokens, and the `backup` folder |
+| [Restore backups](restore-backups.md) | Decrypt `.enc` files, extract website backups, and import MySQL/PostgreSQL dumps |
+| [Chinese docs](zh-CN/wiki.md) | Chinese documentation index |
 
-## 推荐阅读顺序
+## Suggested Reading Order
 
-1. 第一次部署：先看 [初始配置实战](initial-setup-centos-google-drive.md)。
-2. 只想理解 Google Drive remote：看 [Google Drive rclone 初始化配置](google-drive-rclone.md)。
-3. 已经配置好 remote：回到项目 [README](../README.md) 执行 `dg configure` 和 `dg backup`。
-4. 要恢复下载下来的 `.enc` 文件，或查解密命令：看 [恢复备份](restore-backups.md)。
+1. First deployment: start with [CentOS Stream 8 + Google Drive setup](initial-setup-centos-google-drive.md).
+2. Google Drive details only: read [Google Drive rclone setup](google-drive-rclone.md).
+3. Already have a working remote: go back to the [root README](../README.md), then run `dg configure` and `dg backup`.
+4. Need to restore a downloaded `.enc` file: read [Restore backups](restore-backups.md).
 
-## 内容边界
+## Documentation Boundary
 
-- README：项目是什么、能做什么、怎么快速跑起来。
-- Wiki：具体怎么填、遇到报错怎么排、恢复时每一步怎么做。
+- README: what DriveGuard is, what it can do, and how to start quickly.
+- Wiki: exact prompts, configuration choices, troubleshooting, and restore steps.

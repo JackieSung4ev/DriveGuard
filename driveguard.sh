@@ -64,7 +64,7 @@ log() {
 }
 
 die() {
-  log "错误：$*"
+  log "Error: $*"
   exit 1
 }
 
@@ -74,7 +74,7 @@ have() {
 
 require_root() {
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
-    die "请使用 root 用户运行：sudo bash $0"
+    die "Please run as root: sudo bash $0"
   fi
 }
 
@@ -152,7 +152,7 @@ save_config() {
   ensure_dirs
   umask 077
   {
-    printf '# %s 配置文件，生成时间：%s\n' "$DISPLAY_NAME" "$(timestamp)"
+    printf '# %s configuration file, generated at: %s\n' "$DISPLAY_NAME" "$(timestamp)"
     for key in \
       SITES_FILE DATABASES_FILE POSTGRES_DATABASES_FILE \
       ARCHIVE_PASSWORD_FILE MYSQL_DEFAULTS_FILE POSTGRES_PASSFILE \
@@ -171,7 +171,7 @@ save_config() {
 }
 
 pause_enter() {
-  read -r -p "按回车继续..." _
+  read -r -p "Press Enter to continue..." _
 }
 
 confirm() {
@@ -212,17 +212,17 @@ install_dependencies() {
   elif [[ "$distro" == *rhel* || "$distro" == *fedora* || "$distro" == *centos* || "$distro" == *rocky* || "$distro" == *almalinux* || "$distro" == *ol* || ( -z "$distro" && ( -x /usr/bin/dnf || -x /usr/bin/yum ) ) ]]; then
     install_rhel_dependencies
   else
-    die "当前脚本支持 Debian/Ubuntu/CentOS/RHEL 系，检测到：${PRETTY_NAME:-unknown}"
+    die "Supported systems: Debian/Ubuntu/CentOS/RHEL family. Detected: ${PRETTY_NAME:-unknown}"
   fi
 
   ensure_dirs
   ensure_cron_service || true
-  log "依赖检查完成"
+  log "Dependency check complete"
 }
 
 install_debian_dependencies() {
-  have apt-get || die "未找到 apt-get，当前系统不像 Debian/Ubuntu"
-  log "开始安装依赖：git、rclone、cron、openssl、MySQL/PostgreSQL 客户端等"
+  have apt-get || die "apt-get not found; this system does not look like Debian/Ubuntu"
+  log "Installing dependencies: git, rclone, cron, openssl, MySQL/PostgreSQL clients, etc."
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y \
     ca-certificates cron git rclone openssl tar gzip util-linux postgresql-client
@@ -239,10 +239,10 @@ install_rhel_dependencies() {
   elif have yum; then
     pkg_mgr="yum"
   else
-    die "未找到 dnf/yum，当前系统不像 CentOS/RHEL"
+    die "dnf/yum not found; this system does not look like CentOS/RHEL"
   fi
 
-  log "开始安装依赖：git、rclone、cronie、openssl、MySQL/MariaDB/PostgreSQL 客户端等"
+  log "Installing dependencies: git, rclone, cronie, openssl, MySQL/MariaDB/PostgreSQL clients, etc."
   rhel_install_packages "$pkg_mgr" bash ca-certificates cronie git openssl tar gzip util-linux curl unzip mariadb postgresql
 
   if ! have mysqldump && ! have mariadb-dump; then
@@ -251,7 +251,7 @@ install_rhel_dependencies() {
 
   if ! have rclone; then
     if ! rhel_install_packages "$pkg_mgr" rclone; then
-      log "系统源未提供 rclone，改用 rclone 官方安装脚本"
+      log "rclone is not available from system repositories; falling back to the official rclone installer"
       install_rclone_official
     fi
   fi
@@ -264,7 +264,7 @@ rhel_install_packages() {
     return 0
   fi
   if [[ -d /etc/yum.repos.d ]] && grep -Rqs '^\[cloudflare\]' /etc/yum.repos.d; then
-    log "检测到 cloudflare repo，安装失败后临时禁用该 repo 重试"
+    log "Detected cloudflare repo; retrying with that repo temporarily disabled"
     "$pkg_mgr" --disablerepo=cloudflare install -y "$@"
     return $?
   fi
@@ -272,7 +272,7 @@ rhel_install_packages() {
 }
 
 install_rclone_official() {
-  have curl || die "未找到 curl，无法下载 rclone 官方安装脚本"
+  have curl || die "curl not found; cannot download the official rclone installer"
   local installer
   installer="$(mktemp)"
   if curl -fsSL https://rclone.org/install.sh -o "$installer"; then
@@ -280,9 +280,9 @@ install_rclone_official() {
     rm -f "$installer"
   else
     rm -f "$installer"
-    die "下载 rclone 官方安装脚本失败，请检查网络后重试"
+    die "Failed to download the official rclone installer; check network connectivity and retry"
   fi
-  have rclone || die "rclone 安装后仍不可用，请手动执行：curl -fsSL https://rclone.org/install.sh | bash"
+  have rclone || die "rclone is still unavailable after installation; run manually: curl -fsSL https://rclone.org/install.sh | bash"
 }
 
 ensure_cron_service() {
@@ -318,7 +318,7 @@ install_self() {
   fi
   if [[ "$src" != "$INSTALL_PATH" ]]; then
     install -m 700 "$src" "$INSTALL_PATH"
-    log "脚本已安装到：$INSTALL_PATH"
+    log "Script installed to: $INSTALL_PATH"
   else
     chmod 700 "$INSTALL_PATH" 2>/dev/null || true
   fi
@@ -327,7 +327,7 @@ install_self() {
   else
     install -m 700 "$INSTALL_PATH" "$SHORT_INSTALL_PATH"
   fi
-  log "短命令已安装：${APP_NAME}、${SHORT_APP_NAME}"
+  log "Short commands installed: ${APP_NAME}, ${SHORT_APP_NAME}"
 }
 
 install_cli() {
@@ -337,33 +337,33 @@ install_cli() {
 update_self() {
   require_root
   load_config
-  have git || die "未找到 git，请先执行：$SHORT_APP_NAME install-deps，或手动安装 git"
+  have git || die "git not found; run: $SHORT_APP_NAME install-deps, or install git manually"
 
   local repo_dir script_path
-  repo_dir="$(find_update_repo_dir)" || die "未找到源码仓库路径，请进入 DriveGuard 仓库执行：git pull && bash driveguard.sh install"
+  repo_dir="$(find_update_repo_dir)" || die "Source repository path not found; enter the DriveGuard repository and run: git pull && bash driveguard.sh install"
   script_path="${repo_dir}/driveguard.sh"
-  [[ -f "$script_path" ]] || die "源码仓库中未找到脚本：$script_path"
+  [[ -f "$script_path" ]] || die "Script not found in source repository: $script_path"
 
-  log "开始更新源码仓库：$repo_dir"
+  log "Updating source repository: $repo_dir"
   git -C "$repo_dir" pull --ff-only
 
-  [[ -f "$script_path" ]] || die "更新后未找到脚本：$script_path"
+  [[ -f "$script_path" ]] || die "Script not found after update: $script_path"
   UPDATE_REPO_DIR="$repo_dir"
   save_config
   bash "$script_path" install
-  log "脚本已更新到最新版本"
+  log "Script updated to the latest version"
 }
 
 check_rclone_remote() {
   load_config
-  have rclone || die "未找到 rclone，请先执行安装依赖"
+  have rclone || die "rclone not found; install dependencies first"
   if ! rclone listremotes | grep -qx "${RCLONE_REMOTE}:"; then
-    die "rclone remote 不存在：${RCLONE_REMOTE}:，请先配置云盘 remote"
+    die "rclone remote does not exist: ${RCLONE_REMOTE}:; configure the cloud remote first"
   fi
   if rclone lsd "${RCLONE_REMOTE}:" >/dev/null 2>>"$RCLONE_LOG_FILE"; then
-    log "rclone remote 连接正常：${RCLONE_REMOTE}:"
+    log "rclone remote connection OK: ${RCLONE_REMOTE}:"
   else
-    die "rclone remote 连接失败，请重新授权或查看：$RCLONE_LOG_FILE"
+    die "rclone remote connection failed; reauthorize or check: $RCLONE_LOG_FILE"
   fi
 }
 
@@ -371,16 +371,16 @@ configure_rclone_remote() {
   require_root
   load_config
   ensure_dirs
-  have rclone || die "未找到 rclone，请先执行安装依赖"
+  have rclone || die "rclone not found; install dependencies first"
 
-  printf '\nrclone 云盘 remote 配置说明：\n'
-  printf '1. 下面会进入 rclone config。\n'
-  printf '2. 新建 remote 时建议名称填写：%s，或使用你已有的 remote 名称。\n' "$RCLONE_REMOTE"
-  printf '3. Storage 选择你的目标存储，例如 Google Drive、OneDrive、S3、WebDAV、SFTP 等。\n'
-  printf '4. 如果该存储需要浏览器授权，按 rclone 提示在本地电脑授权，再把 token 粘回来。\n\n'
+  printf '\nrclone cloud remote setup notes:\n'
+  printf '1. The script will open rclone config.\n'
+  printf '2. For a new remote, suggested name: %s, or use an existing remote name.\n' "$RCLONE_REMOTE"
+  printf '3. Choose your target storage, such as Google Drive, OneDrive, S3, WebDAV, or SFTP.\n'
+  printf '4. If browser authorization is required, authorize on your local computer and paste the token back here.\n\n'
 
   if rclone listremotes | grep -qx "${RCLONE_REMOTE}:"; then
-    if confirm "检测到 ${RCLONE_REMOTE}: 已存在，是否先尝试重新授权"; then
+    if confirm "Detected ${RCLONE_REMOTE}: already exists. Try reconnecting first"; then
       rclone config reconnect "${RCLONE_REMOTE}:"
     else
       rclone config
@@ -390,7 +390,7 @@ configure_rclone_remote() {
   fi
 
   local new_remote
-  read -r -p "请输入本脚本要使用的 rclone remote 名称 [${RCLONE_REMOTE}]: " new_remote
+  read -r -p "Enter the rclone remote name for this script [${RCLONE_REMOTE}]: " new_remote
   if [[ -n "$new_remote" ]]; then
     RCLONE_REMOTE="$new_remote"
     save_config
@@ -403,16 +403,16 @@ set_archive_password() {
   load_config
   ensure_dirs
   local pass1 pass2
-  read -r -s -p "请输入备份加密密码： " pass1
+  read -r -s -p "Enter backup encryption password: " pass1
   printf '\n'
-  read -r -s -p "请再次输入备份加密密码： " pass2
+  read -r -s -p "Enter backup encryption password again: " pass2
   printf '\n'
-  [[ -n "$pass1" ]] || die "密码不能为空"
-  [[ "$pass1" == "$pass2" ]] || die "两次密码不一致"
+  [[ -n "$pass1" ]] || die "Password cannot be empty"
+  [[ "$pass1" == "$pass2" ]] || die "Passwords do not match"
   umask 077
   printf '%s' "$pass1" > "$ARCHIVE_PASSWORD_FILE"
   chmod 600 "$ARCHIVE_PASSWORD_FILE"
-  log "备份加密密码已保存到：$ARCHIVE_PASSWORD_FILE"
+  log "Backup encryption password saved to: $ARCHIVE_PASSWORD_FILE"
 }
 
 configure_mysql_auth() {
@@ -420,12 +420,12 @@ configure_mysql_auth() {
   load_config
   ensure_dirs
   local mysql_user mysql_pass
-  read -r -p "MySQL 用户 [root]: " mysql_user
+  read -r -p "MySQL user [root]: " mysql_user
   mysql_user="${mysql_user:-root}"
-  read -r -s -p "MySQL 密码： " mysql_pass
+  read -r -s -p "MySQL password: " mysql_pass
   printf '\n'
 
-  [[ -n "$mysql_pass" ]] || die "MySQL 密码不能为空"
+  [[ -n "$mysql_pass" ]] || die "MySQL Password cannot be empty"
   umask 077
   {
     printf '[client]\n'
@@ -433,7 +433,7 @@ configure_mysql_auth() {
     printf 'password=%s\n' "$mysql_pass"
   } > "$MYSQL_DEFAULTS_FILE"
   chmod 600 "$MYSQL_DEFAULTS_FILE"
-  log "MySQL 连接配置已保存到：$MYSQL_DEFAULTS_FILE"
+  log "MySQL connection config saved to: $MYSQL_DEFAULTS_FILE"
 }
 
 configure_postgres_auth() {
@@ -441,12 +441,12 @@ configure_postgres_auth() {
   load_config
   ensure_dirs
   local pg_user pg_pass
-  read -r -p "PostgreSQL 用户 [${POSTGRES_USER}]: " pg_user
+  read -r -p "PostgreSQL user [${POSTGRES_USER}]: " pg_user
   POSTGRES_USER="${pg_user:-$POSTGRES_USER}"
-  read -r -s -p "PostgreSQL 密码： " pg_pass
+  read -r -s -p "PostgreSQL password: " pg_pass
   printf '\n'
 
-  [[ -n "$pg_pass" ]] || die "PostgreSQL 密码不能为空"
+  [[ -n "$pg_pass" ]] || die "PostgreSQL Password cannot be empty"
   umask 077
   printf '%s:%s:*:%s:%s\n' \
     "$(pgpass_escape "$POSTGRES_HOST")" \
@@ -456,7 +456,7 @@ configure_postgres_auth() {
   chmod 600 "$POSTGRES_PASSFILE"
   POSTGRES_ENABLED=1
   save_config
-  log "PostgreSQL 连接密码已保存到：$POSTGRES_PASSFILE"
+  log "PostgreSQL password saved to: $POSTGRES_PASSFILE"
 }
 
 configure_general() {
@@ -465,23 +465,23 @@ configure_general() {
   ensure_dirs
 
   local input
-  read -r -p "rclone remote 名称 [${RCLONE_REMOTE}]: " input
+  read -r -p "rclone remote name [${RCLONE_REMOTE}]: " input
   [[ -n "$input" ]] && RCLONE_REMOTE="$input"
 
-  read -r -p "云端远程目录 [${RCLONE_REMOTE_PATH}]: " input
+  read -r -p "Remote directory [${RCLONE_REMOTE_PATH}]: " input
   [[ -n "$input" ]] && RCLONE_REMOTE_PATH="${input#/}"
   RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH%/}"
 
-  read -r -p "每个站点/数据库保留份数 [${KEEP_COPIES}]: " input
+  read -r -p "Retention copies per site/database [${KEEP_COPIES}]: " input
   if [[ -n "$input" ]]; then
-    valid_positive_int "$input" || die "保留份数必须是正整数"
+    valid_positive_int "$input" || die "Retention copies must be a positive integer"
     KEEP_COPIES="$input"
   fi
 
-  read -r -p "本地备份暂存目录 [${BACKUP_ROOT}]: " input
+  read -r -p "Local backup staging directory [${BACKUP_ROOT}]: " input
   [[ -n "$input" ]] && BACKUP_ROOT="$input"
 
-  read -r -p "定时表达式 cron [${CRON_EXPR}]: " input
+  read -r -p "Cron expression [${CRON_EXPR}]: " input
   [[ -n "$input" ]] && CRON_EXPR="$input"
 
   read -r -p "MySQL host [${MYSQL_HOST}]: " input
@@ -490,12 +490,12 @@ configure_general() {
   read -r -p "MySQL port [${MYSQL_PORT}]: " input
   [[ -n "$input" ]] && MYSQL_PORT="$input"
 
-  read -r -p "MySQL socket，留空则使用 host/port [${MYSQL_SOCKET}]: " input
+  read -r -p "MySQL socket; leave blank to use host/port [${MYSQL_SOCKET}]: " input
   MYSQL_SOCKET="$input"
 
-  read -r -p "PostgreSQL 备份，auto=自动检测 1=启用 0=关闭 [${POSTGRES_ENABLED}]: " input
+  read -r -p "PostgreSQL backup, auto=auto-detect 1=enable 0=disable [${POSTGRES_ENABLED}]: " input
   if [[ -n "$input" ]]; then
-    [[ "$input" == "auto" || "$input" == "0" || "$input" == "1" ]] || die "PostgreSQL 备份只能填写 auto、0 或 1"
+    [[ "$input" == "auto" || "$input" == "0" || "$input" == "1" ]] || die "PostgreSQL backup must be auto, 0, or 1"
     POSTGRES_ENABLED="$input"
   fi
 
@@ -506,27 +506,27 @@ configure_general() {
     read -r -p "PostgreSQL port [${POSTGRES_PORT}]: " input
     [[ -n "$input" ]] && POSTGRES_PORT="$input"
 
-    read -r -p "PostgreSQL 用户 [${POSTGRES_USER}]: " input
+    read -r -p "PostgreSQL user [${POSTGRES_USER}]: " input
     [[ -n "$input" ]] && POSTGRES_USER="$input"
 
-    read -r -p "PostgreSQL 连接库 [${POSTGRES_DEFAULT_DB}]: " input
+    read -r -p "PostgreSQL connection database [${POSTGRES_DEFAULT_DB}]: " input
     [[ -n "$input" ]] && POSTGRES_DEFAULT_DB="$input"
   fi
 
   save_config
 
-  if confirm "是否现在设置备份加密密码"; then
+  if confirm "Set backup encryption password now"; then
     set_archive_password
   fi
-  if confirm "是否现在设置 MySQL 连接信息"; then
+  if confirm "Set MySQL connection now"; then
     configure_mysql_auth
   fi
-  if postgres_backup_enabled && confirm "是否现在设置 PostgreSQL 连接密码"; then
+  if postgres_backup_enabled && confirm "Set PostgreSQL password now"; then
     configure_postgres_auth
   fi
 
   save_config
-  log "基础配置已保存：$CONFIG_FILE"
+  log "Base configuration saved: $CONFIG_FILE"
 }
 
 list_file_numbered() {
@@ -534,7 +534,7 @@ list_file_numbered() {
   if [[ -s "$file" ]]; then
     nl -ba "$file"
   else
-    printf '暂无配置\n'
+    printf 'No entries configured\n'
   fi
 }
 
@@ -542,38 +542,38 @@ delete_list_line() {
   local file="$1"
   local line_no
   list_file_numbered "$file"
-  read -r -p "请输入要删除的行号： " line_no
-  [[ "$line_no" =~ ^[0-9]+$ ]] || die "行号必须是数字"
+  read -r -p "Enter the line number to delete: " line_no
+  [[ "$line_no" =~ ^[0-9]+$ ]] || die "Line number must be numeric"
   sed -i.bak "${line_no}d" "$file"
   rm -f "${file}.bak"
 }
 
 add_site_entry() {
   local name path excludes tmp
-  read -r -p "站点名称： " name
-  read -r -p "站点目录，例如 /www/wwwroot/example.com： " path
-  read -r -p "排除项，多个用英文逗号分隔，例如 .git,cache,logs [可留空]： " excludes
-  [[ -n "$name" && -n "$path" ]] || die "站点名称和目录不能为空"
+  read -r -p "Site name: " name
+  read -r -p "Site directory, e.g. /www/wwwroot/example.com: " path
+  read -r -p "Excludes, comma-separated, e.g. .git,cache,logs [optional]: " excludes
+  [[ -n "$name" && -n "$path" ]] || die "Site name and directory cannot be empty"
   tmp="$(mktemp)"
   awk -F'|' -v site_name="$name" '$1 != site_name' "$SITES_FILE" > "$tmp" 2>/dev/null || true
   printf '%s|%s|%s\n' "$name" "$path" "$excludes" >> "$tmp"
   mv "$tmp" "$SITES_FILE"
   chmod 600 "$SITES_FILE"
-  log "已添加/更新站点：$name"
+  log "Added/updated site: $name"
 }
 
 add_database_entry() {
   local file="$1"
   local label="$2"
   local name tmp
-  read -r -p "数据库名称： " name
-  [[ -n "$name" ]] || die "数据库名称不能为空"
+  read -r -p "Database name: " name
+  [[ -n "$name" ]] || die "Database name cannot be empty"
   tmp="$(mktemp)"
   grep -v -Fx "$name" "$file" > "$tmp" 2>/dev/null || true
   printf '%s\n' "$name" >> "$tmp"
   mv "$tmp" "$file"
   chmod 600 "$file"
-  log "已添加/更新 ${label} 数据库：$name"
+  log "Added/updated ${label} database: $name"
 }
 
 manage_sites_menu() {
@@ -581,16 +581,16 @@ manage_sites_menu() {
   load_config
   ensure_dirs
   while true; do
-    printf '\n网站备份列表：\n'
+    printf '\nWebsite backup list:\n'
     list_file_numbered "$SITES_FILE"
-    printf '\n1. 添加/更新网站\n2. 删除网站\n0. 返回\n'
+    printf '\n1. Add/update website\n2. Delete website\n0. Back\n'
     local choice
-    read -r -p "请选择： " choice
+    read -r -p "Choose: " choice
     case "$choice" in
       1) add_site_entry ;;
       2) delete_list_line "$SITES_FILE" ;;
       0) return 0 ;;
-      *) printf '无效选择\n' ;;
+      *) printf 'Invalid choice\n' ;;
     esac
   done
 }
@@ -600,24 +600,24 @@ manage_databases_menu() {
   load_config
   ensure_dirs
   while true; do
-    printf '\nMySQL/MariaDB 数据库备份列表：\n'
+    printf '\nMySQL/MariaDB database backup list:\n'
     list_file_numbered "$DATABASES_FILE"
-    printf '\nPostgreSQL 数据库备份列表：\n'
+    printf '\nPostgreSQL database backup list:\n'
     list_file_numbered "$POSTGRES_DATABASES_FILE"
-    printf '\n1. 添加/更新 MySQL/MariaDB 数据库\n'
-    printf '2. 删除 MySQL/MariaDB 数据库\n'
-    printf '3. 添加/更新 PostgreSQL 数据库\n'
-    printf '4. 删除 PostgreSQL 数据库\n'
-    printf '0. 返回\n'
+    printf '\n1. Add/update MySQL/MariaDB database\n'
+    printf '2. Delete MySQL/MariaDB database\n'
+    printf '3. Add/update PostgreSQL database\n'
+    printf '4. Delete PostgreSQL database\n'
+    printf '0. Back\n'
     local choice
-    read -r -p "请选择： " choice
+    read -r -p "Choose: " choice
     case "$choice" in
       1) add_database_entry "$DATABASES_FILE" "MySQL/MariaDB" ;;
       2) delete_list_line "$DATABASES_FILE" ;;
       3) add_database_entry "$POSTGRES_DATABASES_FILE" "PostgreSQL" ;;
       4) delete_list_line "$POSTGRES_DATABASES_FILE" ;;
       0) return 0 ;;
-      *) printf '无效选择\n' ;;
+      *) printf 'Invalid choice\n' ;;
     esac
   done
 }
@@ -714,13 +714,13 @@ postgres_status_label() {
   case "$POSTGRES_ENABLED" in
     auto|"")
       if postgres_detected; then
-        printf 'auto（已检测到）'
+        printf 'auto (detected)'
       else
-        printf 'auto（未检测到）'
+        printf 'auto (not detected)'
       fi
       ;;
-    1|yes|true|on) printf '1（已启用）' ;;
-    0|no|false|off) printf '0（已关闭）' ;;
+    1|yes|true|on) printf '1 (enabled)' ;;
+    0|no|false|off) printf '0 (disabled)' ;;
     *) printf '%s' "$POSTGRES_ENABLED" ;;
   esac
 }
@@ -751,7 +751,7 @@ discover_databases() {
   [[ -s "$MYSQL_DEFAULTS_FILE" ]] || return 0
   local client_bin output
   client_bin="$(find_mysql_client_bin)" || {
-    log "未找到 mysql/mariadb 客户端，无法自动发现数据库"
+    log "mysql/mariadb client not found; cannot auto-discover databases"
     return 0
   }
 
@@ -764,7 +764,7 @@ discover_databases() {
   mysql_cmd+=("-e" "show databases;")
 
   if ! output="$("${mysql_cmd[@]}" 2>>"$LOG_FILE")"; then
-    log "自动发现数据库失败，请检查 MySQL 连接信息：$MYSQL_DEFAULTS_FILE"
+    log "Database auto-discovery failed; check MySQL connection info: $MYSQL_DEFAULTS_FILE"
     return 0
   fi
   printf '%s\n' "$output" \
@@ -777,7 +777,7 @@ discover_postgres_databases() {
   [[ -s "$POSTGRES_PASSFILE" ]] || return 0
   local psql_bin output
   psql_bin="$(find_psql_bin)" || {
-    log "未找到 psql，无法自动发现 PostgreSQL 数据库"
+    log "psql not found; cannot auto-discover PostgreSQL databases"
     return 0
   }
 
@@ -785,7 +785,7 @@ discover_postgres_databases() {
   local psql_cmd=("$psql_bin" "-h" "$POSTGRES_HOST" "-p" "$POSTGRES_PORT" "-U" "$POSTGRES_USER" "-d" "$POSTGRES_DEFAULT_DB" "-At" "-c" "$query")
 
   if ! output="$(PGPASSFILE="$POSTGRES_PASSFILE" "${psql_cmd[@]}" 2>>"$LOG_FILE")"; then
-    log "自动发现 PostgreSQL 数据库失败，请检查连接信息：$POSTGRES_PASSFILE"
+    log "PostgreSQL auto-discovery failed; check connection info: $POSTGRES_PASSFILE"
     return 0
   fi
   printf '%s\n' "$output" | sed '/^[[:space:]]*$/d' || true
@@ -803,7 +803,7 @@ remote_dir_for() {
 encrypt_file() {
   local src="$1"
   local dest="$2"
-  [[ -s "$ARCHIVE_PASSWORD_FILE" ]] || die "未设置备份加密密码，请先在菜单中设置"
+  [[ -s "$ARCHIVE_PASSWORD_FILE" ]] || die "Backup encryption password is not set; configure it first"
   openssl enc -aes-256-cbc -salt -pbkdf2 -iter 200000 \
     -in "$src" -out "$dest" -pass "file:${ARCHIVE_PASSWORD_FILE}" >/dev/null
   chmod 600 "$dest"
@@ -814,11 +814,11 @@ decrypt_backup_file() {
   load_config
   local src="${1:-}"
   local dest="${2:-}"
-  [[ -n "$src" && -n "$dest" ]] || die "用法：$0 decrypt 源文件.enc 输出文件"
-  [[ -s "$ARCHIVE_PASSWORD_FILE" ]] || die "未找到密码文件：$ARCHIVE_PASSWORD_FILE"
+  [[ -n "$src" && -n "$dest" ]] || die "Usage: $0 decrypt source.enc output"
+  [[ -s "$ARCHIVE_PASSWORD_FILE" ]] || die "Password file not found: $ARCHIVE_PASSWORD_FILE"
   openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
     -in "$src" -out "$dest" -pass "file:${ARCHIVE_PASSWORD_FILE}"
-  log "已解密：$dest"
+  log "Decrypted: $dest"
 }
 
 prune_local_dir() {
@@ -830,7 +830,7 @@ prune_local_dir() {
   local i
   for ((i = keep; i < ${#files[@]}; i++)); do
     rm -f -- "$dir/${files[$i]}"
-    log "已清理本地过期备份：$dir/${files[$i]}"
+    log "Pruned old local backup: $dir/${files[$i]}"
   done
 }
 
@@ -843,7 +843,7 @@ prune_remote_dir() {
   for ((i = keep; i < ${#files[@]}; i++)); do
     [[ -n "${files[$i]}" ]] || continue
     if rclone deletefile "${remote_dir}/${files[$i]}" >>"$RCLONE_LOG_FILE" 2>&1; then
-      log "已清理远程过期备份：${remote_dir}/${files[$i]}"
+      log "Pruned old remote backup: ${remote_dir}/${files[$i]}"
     fi
   done
 }
@@ -867,7 +867,7 @@ backup_site() {
   local excludes="${3:-}"
   local safe_name ts dest_dir tmp_file final_file parent base exclude
   local -a tar_args exclude_items
-  [[ -d "$path" ]] || die "站点目录不存在：$name -> $path"
+  [[ -d "$path" ]] || die "Site directory does not exist: $name -> $path"
 
   safe_name="$(sanitize_name "$name")"
   ts="$(date '+%Y%m%d_%H%M%S')"
@@ -878,7 +878,7 @@ backup_site() {
   parent="$(dirname "$path")"
   base="$(basename "$path")"
 
-  log "开始备份网站：$name"
+  log "Backing up website: $name"
   tar_args=(-czf "$tmp_file" -C "$parent")
   if [[ -n "$excludes" ]]; then
     IFS=',' read -r -a exclude_items <<< "$excludes"
@@ -894,14 +894,14 @@ backup_site() {
   rm -f -- "$tmp_file"
   upload_and_prune "$final_file" "site/$safe_name"
   prune_local_dir "$dest_dir" "$KEEP_COPIES"
-  log "网站备份完成：$name -> $final_file"
+  log "Website backup complete: $name -> $final_file"
 }
 
 backup_database() {
   local db_name="$1"
   local safe_name ts dest_dir tmp_file final_file dump_bin
-  [[ -s "$MYSQL_DEFAULTS_FILE" ]] || die "未配置 MySQL 连接信息，请先在菜单中设置"
-  dump_bin="$(find_mysqldump_bin)" || die "未找到 mysqldump/mariadb-dump"
+  [[ -s "$MYSQL_DEFAULTS_FILE" ]] || die "MySQL connection info is not configured; set it in the menu first"
+  dump_bin="$(find_mysqldump_bin)" || die "mysqldump/mariadb-dump not found"
 
   safe_name="$(sanitize_name "$db_name")"
   ts="$(date '+%Y%m%d_%H%M%S')"
@@ -922,21 +922,21 @@ backup_database() {
   fi
   dump_cmd+=(--databases "$db_name")
 
-  log "开始备份 MySQL/MariaDB 数据库：$db_name"
+  log "Backing up MySQL/MariaDB database: $db_name"
   "${dump_cmd[@]}" | gzip -9 > "$tmp_file"
   encrypt_file "$tmp_file" "$final_file"
   rm -f -- "$tmp_file"
   upload_and_prune "$final_file" "database/$safe_name"
   prune_local_dir "$dest_dir" "$KEEP_COPIES"
-  log "MySQL/MariaDB 数据库备份完成：$db_name -> $final_file"
+  log "MySQL/MariaDB database backup complete: $db_name -> $final_file"
 }
 
 backup_postgres_database() {
   local db_name="$1"
   local safe_name ts dest_dir tmp_file final_file dump_bin
-  postgres_backup_enabled || die "PostgreSQL 备份未启用或未检测到 PostgreSQL，请先执行配置"
-  [[ -s "$POSTGRES_PASSFILE" ]] || die "未配置 PostgreSQL 连接密码，请先在菜单中设置"
-  dump_bin="$(find_pg_dump_bin)" || die "未找到 pg_dump"
+  postgres_backup_enabled || die "PostgreSQL backup is disabled or PostgreSQL was not detected; configure it first"
+  [[ -s "$POSTGRES_PASSFILE" ]] || die "PostgreSQL password is not configured; set it in the menu first"
+  dump_bin="$(find_pg_dump_bin)" || die "pg_dump not found"
 
   safe_name="$(sanitize_name "$db_name")"
   ts="$(date '+%Y%m%d_%H%M%S')"
@@ -947,27 +947,27 @@ backup_postgres_database() {
 
   local dump_cmd=("$dump_bin" "-h" "$POSTGRES_HOST" "-p" "$POSTGRES_PORT" "-U" "$POSTGRES_USER" "--format=plain" "--no-owner" "--no-privileges" "$db_name")
 
-  log "开始备份 PostgreSQL 数据库：$db_name"
+  log "Backing up PostgreSQL database: $db_name"
   PGPASSFILE="$POSTGRES_PASSFILE" "${dump_cmd[@]}" | gzip -9 > "$tmp_file"
   encrypt_file "$tmp_file" "$final_file"
   rm -f -- "$tmp_file"
   upload_and_prune "$final_file" "database/postgresql/$safe_name"
   prune_local_dir "$dest_dir" "$KEEP_COPIES"
-  log "PostgreSQL 数据库备份完成：$db_name -> $final_file"
+  log "PostgreSQL database backup complete: $db_name -> $final_file"
 }
 
 backup_all() {
   require_root
   load_config
   ensure_dirs
-  have flock || die "缺少 flock，请先安装 util-linux"
+  have flock || die "flock is missing; install util-linux first"
   exec 9>"$LOCK_FILE"
   if ! flock -n 9; then
-    log "已有备份任务正在运行，本次退出"
+    log "A backup job is already running; exiting"
     exit 0
   fi
 
-  ensure_cron_service || log "提醒：cron 服务检查失败，请手动确认 cron 是否运行"
+  ensure_cron_service || log "Warning: cron service check failed; verify cron manually"
 
   local site_count=0
   local mysql_count=0
@@ -989,7 +989,7 @@ backup_all() {
   fi
 
   if [[ "$AUTO_DISCOVER_SITES" == "1" ]]; then
-    log "自动发现网站目录：$SITE_ROOTS"
+    log "Auto-discovering website directories: $SITE_ROOTS"
     while IFS='|' read -r name path excludes; do
       [[ -n "$name" && -n "$path" ]] || continue
       site_key="$path"
@@ -1001,7 +1001,7 @@ backup_all() {
   fi
 
   if [[ "$site_count" -eq 0 ]]; then
-    log "未找到可备份网站；可在 $SITES_FILE 添加站点，或设置 SITE_ROOTS"
+    log "No websites found for backup; add sites in $SITES_FILE or configure SITE_ROOTS"
   fi
 
   if [[ -s "$DATABASES_FILE" ]]; then
@@ -1015,7 +1015,7 @@ backup_all() {
   fi
 
   if [[ "$AUTO_DISCOVER_DATABASES" == "1" ]]; then
-    log "自动发现 MySQL/MariaDB 数据库"
+    log "Auto-discovering MySQL/MariaDB databases"
     while IFS= read -r db_name; do
       [[ -z "${db_name//[[:space:]]/}" || "${db_name:0:1}" == "#" ]] && continue
       [[ -n "${seen_databases[$db_name]+x}" ]] && continue
@@ -1026,7 +1026,7 @@ backup_all() {
   fi
 
   if postgres_backup_enabled && [[ ! -s "$POSTGRES_PASSFILE" ]]; then
-    log "已检测到或已启用 PostgreSQL，但未配置连接密码，跳过 PostgreSQL 备份；请执行 dg configure 设置"
+    log "PostgreSQL was detected or enabled, but no password is configured; skipping PostgreSQL backup. Run dg configure."
   elif postgres_backup_enabled; then
     if [[ -s "$POSTGRES_DATABASES_FILE" ]]; then
       while IFS= read -r db_name; do
@@ -1039,7 +1039,7 @@ backup_all() {
     fi
 
     if [[ "$AUTO_DISCOVER_DATABASES" == "1" ]]; then
-      log "自动发现 PostgreSQL 数据库"
+      log "Auto-discovering PostgreSQL databases"
       while IFS= read -r db_name; do
         [[ -z "${db_name//[[:space:]]/}" || "${db_name:0:1}" == "#" ]] && continue
         [[ -n "${seen_postgres_databases[$db_name]+x}" ]] && continue
@@ -1049,14 +1049,14 @@ backup_all() {
       done < <(discover_postgres_databases)
     fi
   elif [[ -s "$POSTGRES_DATABASES_FILE" ]]; then
-    log "PostgreSQL 备份未启用，已跳过：$POSTGRES_DATABASES_FILE"
+    log "PostgreSQL backup is disabled; skipped: $POSTGRES_DATABASES_FILE"
   fi
 
   if [[ "$mysql_count" -eq 0 && "$postgres_count" -eq 0 ]]; then
-    log "未找到可备份数据库；可在 $DATABASES_FILE 或 $POSTGRES_DATABASES_FILE 添加数据库，或检查连接信息"
+    log "No databases found for backup; add databases in $DATABASES_FILE or $POSTGRES_DATABASES_FILE, or check connection info"
   fi
 
-  log "本次备份结束：网站 ${site_count} 个，MySQL/MariaDB 数据库 ${mysql_count} 个，PostgreSQL 数据库 ${postgres_count} 个，保留 ${KEEP_COPIES} 份"
+  log "Backup finished: websites ${site_count}, MySQL/MariaDB databases ${mysql_count}, PostgreSQL databases ${postgres_count}, retention ${KEEP_COPIES} copies"
 }
 
 install_cron_entries() {
@@ -1064,7 +1064,7 @@ install_cron_entries() {
   load_config
   ensure_dirs
   install_self
-  valid_positive_int "$KEEP_COPIES" || die "KEEP_COPIES 必须是正整数"
+  valid_positive_int "$KEEP_COPIES" || die "KEEP_COPIES must be a positive integer"
 
   local tmp
   tmp="$(mktemp)"
@@ -1079,21 +1079,21 @@ install_cron_entries() {
   } >> "$tmp"
   crontab "$tmp"
   rm -f "$tmp"
-  ensure_cron_service || die "定时任务已写入，但 cron 服务启动失败"
-  log "定时任务已安装：$CRON_EXPR"
+  ensure_cron_service || die "Cron entries were written, but the cron service failed to start"
+  log "Cron job installed: $CRON_EXPR"
 }
 
 guard_cron() {
   require_root
   load_config
   ensure_dirs
-  ensure_cron_service || die "cron 服务守护失败"
+  ensure_cron_service || die "cron service guard failed"
   if [[ "$ENABLE_CRON_GUARD" == "1" ]]; then
     if ! crontab -l 2>/dev/null | grep -Fq "$CRON_MARKER_BEGIN"; then
       install_cron_entries
     fi
   fi
-  log "cron 守护检查完成"
+  log "cron guard check complete"
 }
 
 install_systemd_guard() {
@@ -1101,8 +1101,8 @@ install_systemd_guard() {
   load_config
   ensure_dirs
   install_self
-  have systemctl || die "未找到 systemctl，无法安装 systemd 守护"
-  [[ -d /run/systemd/system ]] || die "当前环境不像正在运行的 systemd"
+  have systemctl || die "systemctl not found; cannot install systemd guard"
+  [[ -d /run/systemd/system ]] || die "Current environment does not look like a running systemd environment"
 
   cat > /etc/systemd/system/${APP_NAME}-cron-guard.service <<EOF
 [Unit]
@@ -1128,12 +1128,12 @@ EOF
 
   systemctl daemon-reload
   systemctl enable --now "${APP_NAME}-cron-guard.timer"
-  log "cron 守护 timer 已安装：${APP_NAME}-cron-guard.timer"
+  log "cron guard timer installed: ${APP_NAME}-cron-guard.timer"
 }
 
 remove_cron_entries() {
   if ! have crontab; then
-    log "未找到 crontab，跳过 cron 定时任务清理"
+    log "crontab not found; skipping cron cleanup"
     return 0
   fi
 
@@ -1143,12 +1143,12 @@ remove_cron_entries() {
     | sed -e "/${CRON_MARKER_BEGIN}/,/${CRON_MARKER_END}/d" > "$tmp" || true
   crontab "$tmp"
   rm -f "$tmp"
-  log "已移除 cron 定时任务"
+  log "Removed cron jobs"
 }
 
 remove_systemd_guard() {
   if ! have systemctl; then
-    log "未找到 systemctl，跳过 systemd 守护清理"
+    log "systemctl not found; skipping systemd guard cleanup"
     return 0
   fi
 
@@ -1158,7 +1158,7 @@ remove_systemd_guard() {
     "/etc/systemd/system/${APP_NAME}-cron-guard.service" \
     "/etc/systemd/system/${APP_NAME}-cron-guard.timer"
   systemctl daemon-reload >/dev/null 2>&1 || true
-  log "已移除 systemd cron 守护"
+  log "Removed systemd cron guard"
 }
 
 remove_path_if_confirmed() {
@@ -1169,16 +1169,16 @@ remove_path_if_confirmed() {
   resolved="$(readlink -f "$target" 2>/dev/null || printf '%s' "$target")"
   case "$resolved" in
     /|/etc|/var|/usr|/usr/local|/var/log|/var/lib|/var/backups|/root|/home)
-      log "拒绝删除高危路径：$resolved"
+      log "Refusing to delete dangerous path: $resolved"
       return 0
       ;;
   esac
 
-  if confirm "是否删除${label}：${target}"; then
+  if confirm "Delete ${label}: ${target}"; then
     rm -rf -- "$target"
-    log "已删除${label}：$target"
+    log "Deleted ${label}: $target"
   else
-    log "已保留${label}：$target"
+    log "Kept ${label}: $target"
   fi
 }
 
@@ -1186,67 +1186,67 @@ uninstall_app() {
   require_root
   load_config
 
-  printf '\n卸载说明：\n'
-  printf '  - 会移除本脚本安装的 cron 定时任务。\n'
-  printf '  - 会移除本脚本安装的 systemd cron 守护。\n'
-  printf '  - 不会删除云端已上传的备份。\n'
-  printf '  - 配置、密码、日志、本地备份目录会逐项询问后再删除。\n\n'
-  confirm "确认开始卸载 ${DISPLAY_NAME}" || return 0
+  printf '\nUninstall notes:\n'
+  printf '  - Removes cron jobs installed by this script.\n'
+  printf '  - Removes the systemd cron guard installed by this script.\n'
+  printf '  - Does not delete backups already uploaded to remote storage.\n'
+  printf '  - Asks before removing config, secrets, logs, and local backup directories.\n\n'
+  confirm "Confirm uninstall ${DISPLAY_NAME}" || return 0
 
   remove_cron_entries
   remove_systemd_guard
 
-  remove_path_if_confirmed "配置和密钥目录" "$CONFIG_DIR"
-  remove_path_if_confirmed "本地备份暂存目录" "$BACKUP_ROOT"
-  remove_path_if_confirmed "状态目录" "$STATE_DIR"
-  remove_path_if_confirmed "日志目录" "$LOG_DIR"
+  remove_path_if_confirmed "config and secret directory" "$CONFIG_DIR"
+  remove_path_if_confirmed "local backup staging directory" "$BACKUP_ROOT"
+  remove_path_if_confirmed "state directory" "$STATE_DIR"
+  remove_path_if_confirmed "log directory" "$LOG_DIR"
   local current_script
   current_script="$(script_self)"
   if [[ -e "$INSTALL_PATH" ]]; then
     rm -f -- "$INSTALL_PATH"
-    log "已删除安装脚本：$INSTALL_PATH"
+    log "Deleted installed script: $INSTALL_PATH"
   fi
   if [[ -L "$SHORT_INSTALL_PATH" || -e "$SHORT_INSTALL_PATH" ]]; then
     rm -f -- "$SHORT_INSTALL_PATH"
-    log "已删除短命令：$SHORT_INSTALL_PATH"
+    log "Deleted short command: $SHORT_INSTALL_PATH"
   fi
   if [[ "$current_script" != "$INSTALL_PATH" ]]; then
-    log "当前运行脚本未删除：$current_script"
+    log "Current running script was not deleted: $current_script"
   fi
-  log "卸载完成"
+  log "Uninstall complete"
 }
 
 show_logs() {
   load_config
   ensure_dirs
   local lines="${1:-80}"
-  printf '\n主日志：%s\n' "$LOG_FILE"
+  printf '\nMain log: %s\n' "$LOG_FILE"
   tail -n "$lines" "$LOG_FILE" 2>/dev/null || true
-  printf '\nrclone 日志：%s\n' "$RCLONE_LOG_FILE"
+  printf '\nrclone log: %s\n' "$RCLONE_LOG_FILE"
   tail -n 40 "$RCLONE_LOG_FILE" 2>/dev/null || true
 }
 
 print_status() {
   load_config
   ensure_dirs
-  printf '\n当前配置：\n'
-  printf '  配置文件：%s\n' "$CONFIG_FILE"
-  printf '  更新仓库：%s\n' "${UPDATE_REPO_DIR:-未记录}"
-  printf '  rclone remote：%s:\n' "$RCLONE_REMOTE"
-  printf '  远程目录：%s\n' "${RCLONE_REMOTE_PATH:-/}"
-  printf '  本地目录：%s\n' "$BACKUP_ROOT"
-  printf '  保留份数：%s\n' "$KEEP_COPIES"
-  printf '  自动发现网站：%s\n' "$AUTO_DISCOVER_SITES"
-  printf '  网站根目录：%s\n' "$SITE_ROOTS"
-  printf '  自动发现数据库：%s\n' "$AUTO_DISCOVER_DATABASES"
-  printf '  PostgreSQL 备份：%s\n' "$(postgres_status_label)"
-  printf '  定时任务：%s\n' "$CRON_EXPR"
-  printf '  网站列表：%s\n' "$SITES_FILE"
-  printf '  MySQL/MariaDB 数据库列表：%s\n' "$DATABASES_FILE"
-  printf '  PostgreSQL 数据库列表：%s\n' "$POSTGRES_DATABASES_FILE"
-  printf '  密码文件：%s\n' "$ARCHIVE_PASSWORD_FILE"
-  printf '  MySQL 配置：%s\n' "$MYSQL_DEFAULTS_FILE"
-  printf '  PostgreSQL 密码文件：%s\n' "$POSTGRES_PASSFILE"
+  printf '\nCurrent configuration:\n'
+  printf '  Config file: %s\n' "$CONFIG_FILE"
+  printf '  Update repository: %s\n' "${UPDATE_REPO_DIR:-not recorded}"
+  printf '  rclone remote: %s:\n' "$RCLONE_REMOTE"
+  printf '  Remote directory: %s\n' "${RCLONE_REMOTE_PATH:-/}"
+  printf '  Local directory: %s\n' "$BACKUP_ROOT"
+  printf '  Retention copies: %s\n' "$KEEP_COPIES"
+  printf '  Auto-discover websites: %s\n' "$AUTO_DISCOVER_SITES"
+  printf '  Website roots: %s\n' "$SITE_ROOTS"
+  printf '  Auto-discover databases: %s\n' "$AUTO_DISCOVER_DATABASES"
+  printf '  PostgreSQL backup: %s\n' "$(postgres_status_label)"
+  printf '  Cron schedule: %s\n' "$CRON_EXPR"
+  printf '  Website list: %s\n' "$SITES_FILE"
+  printf '  MySQL/MariaDB database list: %s\n' "$DATABASES_FILE"
+  printf '  PostgreSQL database list: %s\n' "$POSTGRES_DATABASES_FILE"
+  printf '  Password file: %s\n' "$ARCHIVE_PASSWORD_FILE"
+  printf '  MySQL config: %s\n' "$MYSQL_DEFAULTS_FILE"
+  printf '  PostgreSQL password file: %s\n' "$POSTGRES_PASSFILE"
 }
 
 menu() {
@@ -1254,22 +1254,22 @@ menu() {
   load_config
   ensure_dirs
   while true; do
-    printf '\n%s 中文管理菜单\n' "$DISPLAY_NAME"
-    printf '1. 安装/检查依赖\n'
-    printf '2. rclone 云盘授权/检查\n'
-    printf '3. 基础配置和密码\n'
-    printf '4. 管理网站备份列表\n'
-    printf '5. 管理数据库备份列表\n'
-    printf '6. 安装/更新 cron 定时任务\n'
-    printf '7. 安装 cron 进程守护\n'
-    printf '8. 立即执行一次备份\n'
-    printf '9. 查看日志\n'
-    printf '10. 查看当前配置\n'
-    printf '11. 更新 DriveGuard 脚本\n'
-    printf '12. 卸载脚本和定时守护\n'
-    printf '0. 退出\n'
+    printf '\n%s management menu\n' "$DISPLAY_NAME"
+    printf '1. Install/check dependencies\n'
+    printf '2. Configure/check rclone remote\n'
+    printf '3. Base configuration and passwords\n'
+    printf '4. Manage website backup list\n'
+    printf '5. Manage database backup list\n'
+    printf '6. Install/update cron jobs\n'
+    printf '7. Install cron process guard\n'
+    printf '8. Run a backup now\n'
+    printf '9. Show logs\n'
+    printf '10. Show current configuration\n'
+    printf '11. Update DriveGuard script\n'
+    printf '12. Uninstall script and scheduled guards\n'
+    printf '0. Exit\n'
     local choice
-    read -r -p "请选择： " choice
+    read -r -p "Choose: " choice
     case "$choice" in
       1) install_dependencies; pause_enter ;;
       2) configure_rclone_remote; pause_enter ;;
@@ -1284,29 +1284,29 @@ menu() {
       11) update_self; pause_enter ;;
       12) uninstall_app; pause_enter ;;
       0) exit 0 ;;
-      *) printf '无效选择\n' ;;
+      *) printf 'Invalid choice\n' ;;
     esac
   done
 }
 
 usage() {
   cat <<EOF
-用法：
-  $0 menu              打开中文交互菜单
-  $0 install           安装/更新 driveguard 和 dg 短命令
-  $0 update            从 Git 仓库拉取并更新脚本
-  $0 install-deps      安装 Debian/Ubuntu/CentOS/RHEL 依赖
-  $0 auth              配置/检查 rclone 云盘 remote
-  $0 configure         设置基础配置、密码、MySQL/PostgreSQL 连接
-  $0 cron              安装/更新 cron 定时任务
-  $0 install-guard     安装 systemd cron 守护 timer
-  $0 guard-cron        检查并拉起 cron 服务
-  $0 backup            立即执行一次备份
-  $0 log [行数]         查看日志
-  $0 decrypt 源.enc 输出文件
-  $0 uninstall         卸载脚本、cron 和 systemd 守护
+Usage:
+  $0 menu              Open interactive menu
+  $0 install           Install/update driveguard and dg commands
+  $0 update            Pull from Git repository and update script
+  $0 install-deps      Install Debian/Ubuntu/CentOS/RHEL dependencies
+  $0 auth              Configure/check rclone remote
+  $0 configure         Configure base settings, passwords, and MySQL/PostgreSQL connections
+  $0 cron              Install/update cron jobs
+  $0 install-guard     Install systemd cron guard timer
+  $0 guard-cron        Check and start cron service
+  $0 backup            Run one backup immediately
+  $0 log [lines]        Show logs
+  $0 decrypt source.enc output
+  $0 uninstall         Uninstall script, cron, and systemd guard
 
-配置文件：
+Config file:
   ${CONFIG_FILE}
 EOF
 }

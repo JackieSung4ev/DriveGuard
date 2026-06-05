@@ -1,28 +1,31 @@
-# 初始配置实战：CentOS Stream 8 + Google Drive
+# Initial Setup: CentOS Stream 8 + Google Drive
 
-这篇记录一次真实的 DriveGuard 初始配置流程：服务器是 CentOS Stream 8，通过 Xshell 操作，备份目标是 Google Drive，并希望最终写入：
+This guide documents a real first-time DriveGuard setup on a CentOS Stream 8 server over SSH/Xshell, using Google Drive as the remote target. The final layout is:
 
 ```text
 gdrive:backup/site/
 gdrive:backup/database/
+gdrive:backup/database/postgresql/
 ```
 
-## 1. 安装 git
+Chinese version: [Chinese docs](zh-CN/initial-setup-centos-google-drive.md)
 
-如果服务器提示：
+## 1. Install Git
+
+If the server says:
 
 ```text
 bash: git: command not found
 ```
 
-先安装 git。遇到 Cloudflare 源 404 时，临时禁用它：
+install Git first. If a third-party repository such as Cloudflare returns metadata errors, disable it temporarily:
 
 ```bash
 dnf --disablerepo=cloudflare install -y git
 git --version
 ```
 
-然后拉取 DriveGuard：
+Clone and install DriveGuard:
 
 ```bash
 cd /home/opc
@@ -31,7 +34,7 @@ cd DriveGuard
 bash driveguard.sh install
 ```
 
-如果 `dg` 提示找不到，但 `/usr/local/bin/dg` 已存在，说明当前 shell 的 `PATH` 没有 `/usr/local/bin`。可以直接建到现有 PATH：
+If `dg` is not found but `/usr/local/bin/dg` exists, your current `PATH` does not include `/usr/local/bin`. Add a symlink in an existing PATH directory:
 
 ```bash
 ln -sfn /usr/local/bin/driveguard /usr/bin/dg
@@ -39,145 +42,132 @@ ln -sfn /usr/local/bin/driveguard /usr/bin/driveguard
 dg help
 ```
 
-## 2. 安装依赖
+## 2. Install Dependencies
 
-现在 DriveGuard 已支持在 CentOS/RHEL 系自动安装依赖：
+DriveGuard can install dependencies automatically on Debian/Ubuntu and CentOS/RHEL-like systems:
 
 ```bash
 dg install-deps
 ```
 
-它会安装 `git`、`cronie`、`openssl`、`tar`、`gzip`、`util-linux`、`curl`、`unzip`、MariaDB 客户端和 PostgreSQL 客户端；如果系统源没有 `rclone`，会自动改用 rclone 官方安装脚本。
+On CentOS/RHEL-like systems, this installs `git`, `cronie`, `openssl`, `tar`, `gzip`, `util-linux`, `curl`, `unzip`, MariaDB client tools, and PostgreSQL client tools. If the package repository does not provide `rclone`, DriveGuard falls back to the official rclone installer.
 
-如果遇到第三方源元数据错误，例如 Cloudflare repo 404，可以临时禁用坏源后重试：
-
-```bash
-dnf --disablerepo=cloudflare install -y git
-dg install-deps
-```
-
-如果需要数据库备份，确认 MySQL/PostgreSQL dump 工具可用：
+Verify database dump tools if you plan to back up databases:
 
 ```bash
 mysqldump --version || mariadb-dump --version
 pg_dump --version
 ```
 
-## 3. 配置 Google Drive remote
+## 3. Configure the Google Drive Remote
 
-进入配置：
+Start rclone configuration from DriveGuard:
 
 ```bash
 dg auth
 ```
 
-建议 remote 命名为：
+Recommended remote name:
 
 ```text
 gdrive
 ```
 
-Google Drive 配置里常见选项：
+Common Google Drive options:
 
-| 提示 | 推荐选择 | 说明 |
+| Prompt | Recommended value | Why |
 | --- | --- | --- |
-| `root_folder_id>` | 直接回车 | 让 DriveGuard 通过远程目录写入 `backup/` |
-| `service_account_file>` | 直接回车 | 个人 Google 账号 OAuth 不需要 |
-| `Edit advanced config?` | `n` | 普通备份不需要高级配置 |
+| `root_folder_id>` | press Enter | Let DriveGuard write into `backup/` through its remote path setting |
+| `service_account_file>` | press Enter | Personal Google OAuth does not need a service account |
+| `Edit advanced config?` | `n` | Advanced config is not needed for normal backups |
 
-想写入 `gdrive:backup/site/` 和 `gdrive:backup/database/` 时，不要填 `root_folder_id`。稍后在 `dg configure` 里把云端远程目录填成 `backup`。
+If you want the final path to be `gdrive:backup/site/` and `gdrive:backup/database/`, leave `root_folder_id` empty. Later, set the DriveGuard remote path to `backup` in `dg configure`.
 
-如果 rclone 问是否自动打开浏览器：
+When rclone asks whether to open a browser automatically:
 
 ```text
 Use web browser to automatically authenticate rclone with remote?
 ```
 
-Xshell/SSH 服务器选：
+On an SSH/Xshell server, choose:
 
 ```text
 n
 ```
 
-## 4. Windows 本地授权
+## 4. Authorize from Windows
 
-服务器会显示一条命令，类似：
+The server will print a command similar to:
 
 ```bash
 rclone authorize "drive" "..."
 ```
 
-Windows 上安装 rclone：
+Install rclone on Windows:
 
 ```powershell
 winget install Rclone.Rclone
 ```
 
-如果提示 `Path environment variable modified; restart your shell to use the new value.`，关闭 PowerShell，重新打开后检查：
+If the installer says the PATH was modified, close PowerShell and open it again:
 
 ```powershell
 rclone version
 ```
 
-然后在 Windows PowerShell 执行服务器给出的 `rclone authorize "drive" "..."` 命令。浏览器授权成功后，PowerShell 会输出一段 JSON token。把整段 JSON 粘回 Xshell 服务器窗口。
+Run the exact `rclone authorize "drive" "..."` command shown by the server. After browser authorization succeeds, PowerShell prints a JSON token. Paste that entire JSON back into the SSH/Xshell server prompt.
 
-这段 JSON 是真实访问 token，不要发到聊天、截图或公开仓库。
+The token is sensitive. Do not post it in chats, screenshots, logs, or public repositories.
 
-## 5. 处理 Google OAuth 403
+## 5. Handle Google OAuth 403
 
-如果授权时报：
-
-```text
-错误 403：access_denied
-此应用正在测试中
-```
-
-说明 Google OAuth 应用还在测试状态，当前 Gmail 没有权限。两种处理方式：
-
-1. 在 Google Cloud Console 的 Google Auth Platform 里进入 `目标对象`，把授权用的 Gmail 加入测试用户。
-2. 或把发布状态切到正式版。
-
-切到正式版后，可能看到：
+If Google returns:
 
 ```text
-此应用未经 Google 验证
+Error 403: access_denied
+This app is in testing
 ```
 
-如果 OAuth Client 是你自己创建的，可以展开高级选项，选择继续前往，然后允许授权。
+the OAuth app is still in testing mode and your Gmail account is not allowed yet. You can either:
 
-## 6. 保存 remote
+1. Add your Gmail address as a test user in Google Cloud Console under Google Auth Platform.
+2. Switch the OAuth app publishing status to production.
 
-服务器收到 token 后，rclone 会问是否配置 Shared Drive：
+After switching to production, Google may show an unverified-app warning. If you created the OAuth client yourself, expand the advanced section and continue.
+
+## 6. Save and Verify the Remote
+
+When rclone asks about Shared Drives:
 
 ```text
 Configure this as a Shared Drive?
 ```
 
-个人 Google Drive 选：
+For a personal Google Drive, choose:
 
 ```text
 n
 ```
 
-看到：
+When it asks whether to keep the remote:
 
 ```text
 Keep this "gdrive" remote?
 ```
 
-选：
+choose:
 
 ```text
 y
 ```
 
-回到 rclone 主菜单后输入：
+Return to the rclone main menu and quit:
 
 ```text
 q
 ```
 
-验证 remote：
+Verify the remote:
 
 ```bash
 rclone lsd gdrive:
@@ -185,36 +175,36 @@ rclone mkdir gdrive:backup
 rclone lsf gdrive:backup
 ```
 
-## 7. 配置 DriveGuard
+## 7. Configure DriveGuard
 
-运行：
+Run:
 
 ```bash
 dg configure
 ```
 
-关键项这样填：
+Typical values:
 
 ```text
-rclone remote 名称 [cloud]: gdrive
-云端远程目录 [driveguard]: backup
-每个站点/数据库保留份数 [7]: 7
-本地备份暂存目录 [/var/backups/driveguard]: 直接回车
-定时表达式 cron [0 3 * * *]: 直接回车
-MySQL host [localhost]: 直接回车
-MySQL port [3306]: 直接回车
-MySQL socket，留空则使用 host/port: 直接回车
-PostgreSQL 备份，auto=自动检测 1=启用 0=关闭 [auto]: 本机 PostgreSQL 直接回车；远程 PostgreSQL 填 1；不备份填 0
-PostgreSQL host [localhost]: 直接回车或填写实际地址
-PostgreSQL port [5432]: 直接回车
-PostgreSQL 用户 [postgres]: 填写备份用户
-PostgreSQL 连接库 [postgres]: 直接回车
-是否现在设置备份加密密码: y
-是否现在设置 MySQL 连接信息: 需要备份数据库就 y
-是否现在设置 PostgreSQL 连接密码: 已检测到或已启用 PostgreSQL 就 y
+rclone remote name [cloud]: gdrive
+remote directory [driveguard]: backup
+retention copies per site/database [7]: 7
+local backup staging directory [/var/backups/driveguard]: press Enter
+cron expression [0 3 * * *]: press Enter
+MySQL host [localhost]: press Enter
+MySQL port [3306]: press Enter
+MySQL socket, leave blank to use host/port: press Enter
+PostgreSQL backup, auto=auto-detect 1=enable 0=disable [auto]: press Enter for local PostgreSQL; enter 1 for remote PostgreSQL; enter 0 to disable
+PostgreSQL host [localhost]: press Enter or enter the actual host
+PostgreSQL port [5432]: press Enter
+PostgreSQL user [postgres]: enter the backup user
+PostgreSQL connection database [postgres]: press Enter
+set backup encryption password now: y
+set MySQL connection now: y if you need MySQL/MariaDB backups
+set PostgreSQL password now: y if PostgreSQL was detected or enabled
 ```
 
-配置完成后会生成：
+Generated sensitive files:
 
 ```text
 /etc/driveguard/config.conf
@@ -223,84 +213,80 @@ PostgreSQL 连接库 [postgres]: 直接回车
 /etc/driveguard/postgres.pgpass
 ```
 
-## 8. 添加网站和数据库
+## 8. Website and Database Lists
 
-进入菜单：
+Open the menu:
 
 ```bash
 dg menu
 ```
 
-常用入口：
+Useful entries:
 
 ```text
-4. 管理网站备份列表
-5. 管理数据库备份列表
+4. Manage website backup list
+5. Manage database backup list
 ```
 
-`dg backup` 默认会自动发现常见网站目录、MySQL/MariaDB 非系统数据库，以及自动检测到或已启用 PostgreSQL 后的非模板库。菜单里的列表仍然有用：可以补充特殊网站路径、设置网站排除项，或显式指定数据库。
+`dg backup` automatically discovers common website roots, non-system MySQL/MariaDB databases, and PostgreSQL non-template databases when PostgreSQL is detected or enabled. Manual lists are still useful for special paths, excludes, or explicit database names.
 
-如果你想检查或手动维护 MySQL/MariaDB 数据库列表：
+Manual MySQL/MariaDB list:
 
 ```bash
 nl -ba /etc/driveguard/databases.list
 ```
 
-如果你想检查或手动维护 PostgreSQL 数据库列表：
+Manual PostgreSQL list:
 
 ```bash
 nl -ba /etc/driveguard/postgres.databases.list
 ```
 
-文件里一行一个数据库名，例如：
+Each line is one database name:
 
 ```text
 example_db
 blog_db
 ```
 
-网站会分别上传到：
+Remote layout:
 
 ```text
-gdrive:backup/site/站点名/
+gdrive:backup/site/site-name/
+gdrive:backup/database/mysql-db-name/
+gdrive:backup/database/postgresql/postgres-db-name/
 ```
 
-数据库会分别上传到：
+Each site and database keeps its own retention count.
 
-```text
-gdrive:backup/database/数据库名/
-gdrive:backup/database/postgresql/数据库名/
-```
+## 9. First Backup and Scheduling
 
-每个站点、每个数据库都会独立保留指定份数，例如 7 份。
-
-## 9. 首次备份和定时任务
-
-先手动跑一次：
+Run a manual backup first:
 
 ```bash
 dg backup
 dg log 100
 ```
 
-确认成功后再安装定时任务：
+Enable scheduling only after the manual backup succeeds:
 
 ```bash
 dg cron
 dg install-guard
 ```
 
-查看状态：
+Check status:
 
 ```bash
 dg status
 systemctl status driveguard-cron-guard.timer
 ```
 
-## 10. 常见结论
+## 10. Useful Conclusions
 
-- 网站和数据库都会加密，文件后缀分别是 `.tar.gz.enc` 和 `.sql.gz.enc`。
-- 多个网站、MySQL/MariaDB 数据库和 PostgreSQL 数据库会分别备份、分别上传、分别按保留份数清理。
-- 以后更新 DriveGuard，可以直接执行 `dg update`，或在 `dg menu` 中选择“更新 DriveGuard 脚本”。
-- `root_folder_id` 是限制 remote 根目录用的；只想写到 `backup/` 时，更简单的是在 `dg configure` 里把云端远程目录填 `backup`。
-- 自建 Google OAuth Client 的 token 和 refresh token 都是敏感信息，不要公开。
+- Website backups end with `.tar.gz.enc`.
+- Database backups end with `.sql.gz.enc`.
+- Multiple websites and databases are backed up, uploaded, and pruned independently.
+- Update DriveGuard with `dg update` or menu option `11`.
+- `root_folder_id` limits the remote root. If you only want to write into `backup/`, it is usually simpler to set DriveGuard's remote directory to `backup`.
+- OAuth tokens and refresh tokens are sensitive. Keep them private.
