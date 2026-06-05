@@ -18,7 +18,7 @@ sudo dg menu
 | --- | --- |
 | 云端目标 | 支持满足基础文件操作的 `rclone` remote，例如 Google Drive、OneDrive、Dropbox、S3、WebDAV、SFTP |
 | 网站备份 | 每个站点单独打包成 `.tar.gz.enc` |
-| 数据库备份 | 每个数据库单独导出成 `.sql.gz.enc` |
+| 数据库备份 | 当前支持 MySQL/MariaDB，每个数据库单独导出成 `.sql.gz.enc` |
 | 自动发现 | 立即备份默认扫描常见网站目录，并查询所有非系统数据库 |
 | 加密 | 使用 `openssl aes-256-cbc`，未设置密码时不会上传明文 |
 | 定时 | 写入 root crontab，并可安装 systemd timer 守护 cron |
@@ -167,6 +167,7 @@ sudo dg log 200
 | `未设置备份加密密码` | 执行 `sudo dg configure` 并设置密码 |
 | `未配置 MySQL 连接信息` | 只备份网站可忽略；备份数据库需配置 MySQL |
 | `PROCESS privilege` / `dump tablespaces` | 新版脚本会自动对支持的 dump 工具加 `--no-tablespaces`，更新后重试 |
+| PostgreSQL 是否支持 | 暂未支持；当前数据库备份只覆盖 MySQL/MariaDB |
 | 上传失败 | 看 `/var/log/driveguard/rclone.log`，并单独测试 `rclone lsd remote:` |
 
 ## 卸载
