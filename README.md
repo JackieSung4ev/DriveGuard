@@ -111,7 +111,7 @@ rclone lsd cloud:
 
 ### 常见后端提示
 
-- Google Drive：Storage 选择 Google Drive，`client_id` 和 `client_secret` 可以先留空，scope 通常选 `drive` 或 `drive.file`。
+- Google Drive：Storage 选择 Google Drive，`client_id` 和 `client_secret` 可以先留空，scope 通常选 `drive` 或 `drive.file`；详细步骤见 [Google Drive rclone 初始化配置](docs/google-drive-rclone.md)。
 - OneDrive / Dropbox：通常按提示走浏览器 OAuth 授权即可。
 - S3 兼容对象存储：需要填写 provider、access key、secret key、region、endpoint 等信息。
 - WebDAV：需要填写 URL、用户名和密码。
