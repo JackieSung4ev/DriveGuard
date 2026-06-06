@@ -229,6 +229,9 @@ watch(activePage, () => {
   notice.value = ''
   error.value = ''
   mobileNavOpen.value = false
+  if (editingPlanId.value && activePage.value !== 'plans') {
+    cancelEditPlan()
+  }
 })
 
 watch(themeMode, (value) => {
@@ -281,6 +284,10 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
 function handleDocumentKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') {
+    if (editingPlanId.value) {
+      cancelEditPlan()
+      return
+    }
     closeFloatingControls()
   }
 }
@@ -436,6 +443,7 @@ async function savePlan() {
   savingPlan.value = true
   error.value = ''
   notice.value = ''
+  const wasEditing = Boolean(editingPlanId.value)
 
   try {
     if (planForm.encrypted) {
@@ -468,7 +476,11 @@ async function savePlan() {
     })
 
     await refreshStatus()
-    editingPlanId.value = ''
+    if (wasEditing) {
+      cancelEditPlan()
+    } else {
+      editingPlanId.value = ''
+    }
     notice.value = t('planSaved')
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('savePlanFailed')
@@ -1118,10 +1130,16 @@ onUnmounted(() => {
       </section>
 
       <section v-if="activePage === 'plans'" class="page-stack">
-        <section class="section-block">
+        <div v-if="editingPlanId" class="modal-backdrop plan-editor-backdrop" @click.self="cancelEditPlan"></div>
+        <section
+          :class="['section-block', 'plan-editor-block', { 'plan-editor-modal': editingPlanId }]"
+          :role="editingPlanId ? 'dialog' : undefined"
+          :aria-modal="editingPlanId ? 'true' : undefined"
+          :aria-label="editingPlanId ? t('editingPlan') : undefined"
+        >
           <div class="section-header">
             <div>
-              <p class="eyebrow">Create</p>
+              <p class="eyebrow">{{ editingPlanId ? t('edit') : 'Create' }}</p>
               <h2>{{ editingPlanId ? t('editingPlan') : t('newPlan') }}</h2>
             </div>
             <button v-if="editingPlanId" class="secondary-button" type="button" @click="cancelEditPlan">

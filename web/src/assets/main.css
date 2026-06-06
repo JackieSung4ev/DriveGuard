@@ -237,9 +237,9 @@ a {
 
 .workspace {
   min-width: 0;
-  width: min(100%, 1440px);
+  width: min(100%, 1880px);
   margin: 0 auto;
-  padding: 32px;
+  padding: clamp(28px, 2vw, 40px);
 }
 
 .auth-screen {
@@ -644,6 +644,31 @@ a {
 .section-block {
   margin-bottom: 16px;
   padding: 18px;
+}
+
+.plan-editor-backdrop {
+  z-index: 1000;
+}
+
+.plan-editor-modal {
+  position: fixed;
+  top: 32px;
+  left: 50%;
+  z-index: 1001;
+  width: min(1120px, calc(100vw - 40px));
+  max-height: calc(100dvh - 64px);
+  margin: 0;
+  overflow: auto;
+  transform: translateX(-50%);
+}
+
+.plan-editor-modal .section-header {
+  position: sticky;
+  top: -18px;
+  z-index: 1;
+  padding: 18px 0 14px;
+  margin: -18px 0 14px;
+  background: var(--surface);
 }
 
 .logs-sidebar-panel,
@@ -1223,6 +1248,25 @@ tbody tr:last-child td {
   border-top: 1px solid var(--border);
 }
 
+@media (min-width: 1600px) {
+  .provider-grid,
+  .content-grid {
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  }
+
+  .logs-grid {
+    grid-template-columns: minmax(320px, 0.78fr) minmax(0, 2.22fr);
+  }
+
+  .plan-form {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .plan-editor-modal .plan-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1120px) {
   .app-shell,
   .app-shell.sidebar-collapsed {
@@ -1274,6 +1318,11 @@ tbody tr:last-child td {
   .metric-grid,
   .plan-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .plan-editor-modal {
+    top: 20px;
+    max-height: calc(100dvh - 40px);
   }
 }
 
@@ -1425,6 +1474,13 @@ tbody tr:last-child td {
   .content-grid,
   .plan-form {
     grid-template-columns: 1fr;
+  }
+
+  .plan-editor-modal {
+    inset: 12px;
+    width: auto;
+    max-height: calc(100dvh - 24px);
+    transform: none;
   }
 
   .toggle-row {
