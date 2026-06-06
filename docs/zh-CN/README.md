@@ -1,5 +1,4 @@
 <p align="center">
-  <img src="../../web/public/favicon.jpg" alt="DriveGuard favicon" width="48"><br>
   <img src="../../web/public/logo.png" alt="DriveGuard" width="220">
 </p>
 
