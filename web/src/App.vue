@@ -2,15 +2,20 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import {
   AlertTriangle,
+  ArrowRight,
+  Bell,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
+  Clock3,
   Cloud,
   Copy,
   Database,
   Download,
   FileDown,
+  FileText,
   Folder,
+  Globe2,
   HardDrive,
   Home,
   KeyRound,
@@ -29,13 +34,17 @@ import {
   RefreshCcw,
   Save,
   Server,
+  Settings,
+  Shield,
   ShieldCheck,
   Smartphone,
   SquareTerminal,
   Sun,
+  TrendingUp,
   UploadCloud,
   UserRound,
-  X
+  X,
+  XCircle
 } from '@lucide/vue'
 import {
   bootstrapAccount,
@@ -193,6 +202,134 @@ const displayTargetOptions = computed(() =>
     return { value: target.id, label: `${target.name} - ${target.location}` }
   })
 )
+
+const backupFileCount = computed(() => (localBackup.value?.exists ? localBackup.value.fileCount : 0))
+const enabledPlans = computed(() => plans.value.filter((plan) => plan.enabled).length)
+const finishedJobs = computed(() => jobs.value.filter((job) => job.state === 'success' || job.state === 'failed').length)
+const successfulJobs = computed(() => jobs.value.filter((job) => job.state === 'success').length)
+const successRate = computed(() => {
+  if (finishedJobs.value === 0) return jobs.value.length ? '0%' : '-'
+  return `${Math.round((successfulJobs.value / finishedJobs.value) * 1000) / 10}%`
+})
+const latestBackupLabel = computed(() => {
+  if (localBackup.value?.latestTime) return formatDate(localBackup.value.latestTime)
+  if (status.value?.metrics.lastRun) return formatDate(status.value.metrics.lastRun)
+  return t('notRunYet')
+})
+
+const dashboardMetrics = computed(() => [
+  {
+    id: 'plans',
+    label: t('backupPlans'),
+    value: plans.value.length,
+    detail: t('enabledPlanCount', { count: enabledPlans.value }),
+    foot: plans.value[0] ? readableSchedule(plans.value[0].cron) : t('notRunYet'),
+    icon: CalendarClock,
+    tone: 'blue',
+    badge: `${enabledPlans.value}/${plans.value.length || 0}`
+  },
+  {
+    id: 'files',
+    label: t('backupTotal'),
+    value: backupFileCount.value,
+    detail: t('totalBackupFiles'),
+    foot: latestBackupLabel.value,
+    icon: FileText,
+    tone: 'green',
+    badge: backupFileCount.value > 0 ? t('active') : t('empty')
+  },
+  {
+    id: 'storage',
+    label: t('remoteStorage'),
+    value: providers.value.length,
+    detail: t('providerReadyCount', { count: readyProviders.value, total: providers.value.length }),
+    foot: status.value?.config.remotePath || '-',
+    icon: HardDrive,
+    tone: 'purple',
+    badge: `${readyProviders.value}/${providers.value.length || 0}`
+  },
+  {
+    id: 'success',
+    label: t('successRate'),
+    value: successRate.value,
+    detail: t('recentExecutions'),
+    foot: jobs.value[0]?.startedAt ? formatDate(jobs.value[0].startedAt) : latestBackupLabel.value,
+    icon: ShieldCheck,
+    tone: 'orange',
+    badge: finishedJobs.value ? t('recentJobs') : t('noJobs')
+  }
+])
+
+const dashboardPlans = computed(() => plans.value.slice(0, 4))
+const recentExecutionRows = computed(() => {
+  if (jobs.value.length > 0) {
+    return jobs.value.slice(0, 5).map((job) => ({
+      id: job.id,
+      title: job.type || t('runNow'),
+      subtitle: job.output || t('backupQueued'),
+      time: job.startedAt ? formatDate(job.startedAt) : '-',
+      size: '-',
+      state: job.state,
+      label: jobStateLabel(job.state)
+    }))
+  }
+
+  return logs.value.slice(0, 5).map((line) => ({
+    id: line.id,
+    title: line.message,
+    subtitle: logLevelLabel(line.level),
+    time: line.time,
+    size: '-',
+    state: line.level === 'error' ? 'failed' : line.level === 'warning' ? 'queued' : 'success',
+    label: logLevelLabel(line.level)
+  }))
+})
+
+const storageRows = computed(() => {
+  const visibleProviders = providers.value.slice(0, 4)
+  return visibleProviders.map((provider, index) => ({
+    id: provider.id,
+    name: provider.name,
+    detail: provider.remotePath || provider.remoteName || '-',
+    state: provider.state,
+    tone: ['blue', 'purple', 'orange', 'green'][index % 4]
+  }))
+})
+
+const healthCards = computed(() => [
+  {
+    id: 'service',
+    label: t('apiService'),
+    value: status.value?.service.mode || '-',
+    caption: status.value?.service.api || t('serviceHealthy'),
+    icon: ShieldCheck,
+    state: status.value?.service.mode ? 'ok' : 'warning'
+  },
+  {
+    id: 'remote',
+    label: t('remoteStorage'),
+    value: t('providerReadyCount', { count: readyProviders.value, total: providers.value.length }),
+    caption: readyProviders.value > 0 ? t('serviceHealthy') : t('serviceDegraded'),
+    icon: Cloud,
+    state: readyProviders.value > 0 ? 'ok' : 'warning'
+  },
+  {
+    id: 'archive',
+    label: t('archivePassword'),
+    value: archivePasswordConfigured.value ? t('statusNormal') : t('statusAttention'),
+    caption: archivePasswordConfigured.value ? t('archiveReady') : t('archiveNeedsSetup'),
+    icon: LockKeyhole,
+    state: archivePasswordConfigured.value ? 'ok' : 'warning'
+  },
+  {
+    id: 'cron',
+    label: t('cronGuard'),
+    value: status.value?.config.cronGuard || '-',
+    caption: status.value?.config.cron || t('notRunYet'),
+    icon: Clock3,
+    state: status.value?.config.cronGuard ? 'ok' : 'warning'
+  }
+])
 
 watch(locale, (value, oldValue) => {
   window.localStorage.setItem('driveguard-locale', value)
@@ -718,6 +855,18 @@ function targetIcon(target: BackupTarget) {
   return Database
 }
 
+function planIcon(plan: BackupPlan) {
+  if (plan.kind === 'website') return Globe2
+  if (plan.kind === 'database') return Database
+  return Folder
+}
+
+function planTone(plan: BackupPlan) {
+  if (plan.kind === 'website') return 'blue'
+  if (plan.kind === 'database') return 'purple'
+  return 'orange'
+}
+
 function planKindLabel(kind: BackupKind) {
   if (kind === 'website') return t('website')
   if (kind === 'database') return t('database')
@@ -733,6 +882,19 @@ function planStateLabel(state: string) {
   if (state === 'draft') return t('draft')
   if (state === 'disabled') return t('disabled')
   return t('enabled')
+}
+
+function jobStateLabel(state: string) {
+  if (state === 'success') return t('success')
+  if (state === 'failed') return t('failed')
+  if (state === 'running') return t('running')
+  return t('queued')
+}
+
+function logLevelLabel(level: string) {
+  if (level === 'error') return t('errorLabel')
+  if (level === 'warning') return t('warningLabel')
+  return t('infoLabel')
 }
 
 function providerName(providerId: string) {
@@ -783,7 +945,9 @@ onUnmounted(() => {
   <div v-if="!authState?.configured || !authState.authenticated" class="auth-screen">
     <section class="auth-panel">
       <div class="brand auth-brand">
-        <ShieldCheck :size="30" aria-hidden="true" />
+        <span class="brand-mark">
+          <img src="/logo.png" alt="" />
+        </span>
         <div>
           <strong>DriveGuard</strong>
           <span>{{ t('appLabel') }}</span>
@@ -849,10 +1013,12 @@ onUnmounted(() => {
       :class="['sidebar', { 'sidebar-collapsed': sidebarCollapsed, 'mobile-open': mobileNavOpen }]"
     >
       <div class="brand">
-        <ShieldCheck :size="28" aria-hidden="true" />
+        <span class="brand-mark">
+          <img src="/logo.png" alt="" />
+        </span>
         <div class="brand-copy">
           <strong>DriveGuard</strong>
-          <span>{{ authState.username }}</span>
+          <span>{{ t('brandTagline') }}</span>
         </div>
       </div>
 
@@ -878,10 +1044,30 @@ onUnmounted(() => {
           <span class="nav-label">{{ t('runLogs') }}</span>
         </button>
         <button :class="['nav-item', { active: activePage === 'account' }]" type="button" @click="goPage('account')">
-          <UserRound :size="18" aria-hidden="true" />
+          <Settings :size="18" aria-hidden="true" />
           <span class="nav-label">{{ t('accountSecurity') }}</span>
         </button>
       </nav>
+
+      <div class="sidebar-bottom">
+        <article class="license-card">
+          <span class="license-icon">
+            <Shield :size="20" aria-hidden="true" />
+          </span>
+          <div>
+            <strong>{{ t('professionalEdition') }}</strong>
+            <span>{{ t('webConsole') }}</span>
+          </div>
+        </article>
+        <button class="sidebar-user-card" type="button" @click="goPage('account')">
+          <span class="sidebar-avatar">{{ (authState.username || 'admin').slice(0, 1).toUpperCase() }}</span>
+          <span>
+            <strong>{{ authState.username || 'admin' }}</strong>
+            <small>{{ t('administrator') }}</small>
+          </span>
+          <ChevronDown :size="16" aria-hidden="true" />
+        </button>
+      </div>
 
       <button
         class="sidebar-toggle"
@@ -911,6 +1097,10 @@ onUnmounted(() => {
         </div>
 
         <div class="top-actions">
+          <button class="icon-button notification-button" type="button" :aria-label="t('notifications')" :title="t('notifications')">
+            <Bell :size="18" aria-hidden="true" />
+            <span class="notification-dot" aria-hidden="true"></span>
+          </button>
           <label class="language-control">
             <Languages :size="18" aria-hidden="true" />
             <select ref="languageSelectRef" v-model="locale" :aria-label="t('language')">
@@ -986,70 +1176,162 @@ onUnmounted(() => {
         {{ notice }}
       </div>
 
-      <section v-if="activePage === 'home'" class="page-stack">
-        <div class="dashboard-actions">
-          <button class="secondary-button" type="button" :aria-label="t('refreshStatus')" @click="refresh">
-            <RefreshCcw :size="18" aria-hidden="true" />
-            {{ t('refreshStatus') }}
-          </button>
-          <button class="primary-button" type="button" @click="runBackup" :disabled="runningBackup">
-            <Play :size="18" aria-hidden="true" />
-            {{ runningBackup ? t('starting') : t('runNow') }}
-          </button>
+      <section v-if="activePage === 'home'" class="page-stack dashboard-page">
+        <div class="dashboard-heading-row">
+          <p>{{ t('dashboardSubtitle') }}</p>
+          <div class="dashboard-actions">
+            <button class="secondary-button" type="button" :aria-label="t('refreshStatus')" @click="refresh">
+              <RefreshCcw :size="18" aria-hidden="true" />
+              {{ t('refreshStatus') }}
+            </button>
+            <button class="primary-button" type="button" @click="runBackup" :disabled="runningBackup">
+              <Play :size="18" aria-hidden="true" />
+              {{ runningBackup ? t('starting') : t('runNow') }}
+            </button>
+          </div>
         </div>
 
-        <div class="metric-grid">
-          <article class="metric-panel">
-            <span class="metric-icon"><Cloud :size="20" aria-hidden="true" /></span>
-            <p>{{ t('clouds') }}</p>
-            <strong>{{ providers.length }}</strong>
-            <small>{{ t('providerReady') }}: {{ readyProviders }}</small>
-          </article>
-          <article class="metric-panel">
-            <span class="metric-icon"><CalendarClock :size="20" aria-hidden="true" /></span>
-            <p>{{ t('plans') }}</p>
-            <strong>{{ plans.length }}</strong>
-            <small>{{ plans[0] ? readableSchedule(plans[0].cron) : '-' }}</small>
-          </article>
-          <article class="metric-panel">
-            <span class="metric-icon"><HardDrive :size="20" aria-hidden="true" /></span>
-            <p>{{ t('targets') }}</p>
-            <strong>{{ totalTargets }}</strong>
-            <small>{{ status?.metrics.websites || 0 }} {{ t('website') }}, {{ status?.metrics.mysqlDatabases || 0 }} MySQL</small>
-          </article>
-          <article class="metric-panel">
-            <span class="metric-icon"><ListChecks :size="20" aria-hidden="true" /></span>
-            <p>{{ t('lastRun') }}</p>
-            <strong>{{ status?.metrics.lastRun ? formatDate(status.metrics.lastRun) : '-' }}</strong>
-            <small>{{ status?.service.mode || '-' }}</small>
+        <div class="dashboard-metric-grid">
+          <article v-for="metric in dashboardMetrics" :key="metric.id" class="dashboard-metric-card">
+            <span :class="['dashboard-metric-icon', `metric-tone-${metric.tone}`]">
+              <component :is="metric.icon" :size="24" aria-hidden="true" />
+            </span>
+            <div class="dashboard-metric-copy">
+              <p>{{ metric.label }}</p>
+              <strong>{{ metric.value }}</strong>
+              <span>{{ metric.detail }}</span>
+            </div>
+            <span :class="['metric-chip', `metric-chip-${metric.tone}`]">
+              <TrendingUp :size="14" aria-hidden="true" />
+              {{ metric.badge }}
+            </span>
+            <small>{{ metric.foot }}</small>
           </article>
         </div>
 
-        <section class="content-grid">
-          <article class="section-block">
+        <section class="dashboard-main-grid">
+          <article class="section-block dashboard-card plan-overview-card">
             <div class="section-header">
               <div>
-                <p class="eyebrow">Local</p>
-                <h2>{{ t('localBackups') }}</h2>
+                <p class="eyebrow">{{ t('plans') }}</p>
+                <h2>{{ t('backupPlans') }}</h2>
               </div>
-              <button
-                class="secondary-button"
-                type="button"
-                :disabled="!localBackup?.path"
-                @click="copyText(localBackup?.path || '')"
-              >
-                <Copy :size="16" aria-hidden="true" />
-                {{ t('copyPath') }}
+              <button class="primary-button" type="button" @click="goPage('plans')">
+                <Plus :size="16" aria-hidden="true" />
+                {{ t('createPlanShort') }}
               </button>
             </div>
-            <dl class="compact-list backup-path-list">
+
+            <div class="dashboard-plan-list">
+              <button
+                v-for="plan in dashboardPlans"
+                :key="plan.id"
+                class="dashboard-plan-card"
+                type="button"
+                @click="goPage('plans')"
+              >
+                <span :class="['plan-card-icon', `plan-tone-${planTone(plan)}`]">
+                  <component :is="planIcon(plan)" :size="24" aria-hidden="true" />
+                </span>
+                <span class="plan-card-body">
+                  <span class="plan-title-row">
+                    <strong>{{ plan.name }}</strong>
+                    <span :class="['badge', `badge-${plan.state}`]">{{ planStateLabel(plan.state) }}</span>
+                  </span>
+                  <span class="plan-card-target">{{ planKindLabel(plan.kind) }} · {{ planTargetLabel(plan.target) }}</span>
+                  <span class="plan-meta-row">
+                    <span><Cloud :size="14" aria-hidden="true" />{{ providerName(plan.providerId) }}</span>
+                    <span><CalendarClock :size="14" aria-hidden="true" />{{ readableSchedule(plan.cron) }}</span>
+                    <span><Download :size="14" aria-hidden="true" />{{ t('keepCopies', { count: plan.retentionCopies }) }}</span>
+                  </span>
+                </span>
+                <span class="plan-last-run">
+                  <small>{{ t('lastBackup') }}</small>
+                  <strong>{{ plan.lastRun ? formatDate(plan.lastRun) : t('notRunYet') }}</strong>
+                </span>
+                <ArrowRight :size="18" aria-hidden="true" />
+              </button>
+
+              <button v-if="dashboardPlans.length === 0" class="dashboard-empty-card" type="button" @click="goPage('plans')">
+                <CalendarClock :size="22" aria-hidden="true" />
+                <span>{{ t('newPlan') }}</span>
+              </button>
+            </div>
+
+            <button class="ghost-button dashboard-link-button" type="button" @click="goPage('plans')">
+              {{ t('viewAll') }}
+              <ArrowRight :size="16" aria-hidden="true" />
+            </button>
+          </article>
+
+          <article class="section-block dashboard-card recent-executions-card">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">{{ t('recent') }}</p>
+                <h2>{{ t('recentExecutions') }}</h2>
+              </div>
+              <button class="ghost-button" type="button" @click="goPage('logs')">
+                {{ t('viewAll') }}
+                <ArrowRight :size="16" aria-hidden="true" />
+              </button>
+            </div>
+
+            <ul class="execution-list">
+              <li v-for="row in recentExecutionRows" :key="row.id" :class="['execution-row', `execution-${row.state}`]">
+                <span class="execution-icon">
+                  <CheckCircle2 v-if="row.state === 'success'" :size="22" aria-hidden="true" />
+                  <XCircle v-else-if="row.state === 'failed'" :size="22" aria-hidden="true" />
+                  <Clock3 v-else :size="22" aria-hidden="true" />
+                </span>
+                <span class="execution-copy">
+                  <strong>{{ row.title }}</strong>
+                  <small>{{ row.subtitle }}</small>
+                </span>
+                <span :class="['badge', `badge-${row.state}`]">{{ row.label }}</span>
+                <time>{{ row.time }}</time>
+                <span>{{ row.size }}</span>
+              </li>
+              <li v-if="recentExecutionRows.length === 0" class="execution-empty">
+                <ListChecks :size="22" aria-hidden="true" />
+                <span>{{ t('noJobs') }}</span>
+              </li>
+            </ul>
+          </article>
+        </section>
+
+        <section class="dashboard-bottom-grid">
+          <article class="section-block dashboard-card storage-card">
+            <div class="section-header">
+              <div>
+                <p class="eyebrow">{{ t('clouds') }}</p>
+                <h2>{{ t('storageUsage') }}</h2>
+              </div>
+              <button class="ghost-button" type="button" @click="goPage('cloud')">
+                {{ t('manageStorage') }}
+                <ArrowRight :size="16" aria-hidden="true" />
+              </button>
+            </div>
+            <div class="storage-summary">
+              <div class="storage-donut">
+                <strong>{{ backupFileCount }}</strong>
+                <span>{{ t('backupFiles') }}</span>
+              </div>
+              <ul class="storage-list">
+                <li v-for="row in storageRows" :key="row.id">
+                  <span :class="['storage-swatch', `storage-swatch-${row.tone}`]"></span>
+                  <span>
+                    <strong>{{ row.name }}</strong>
+                    <small>{{ row.detail }}</small>
+                  </span>
+                  <span>{{ row.state === 'connected' ? t('connected') : t('needsAuth') }}</span>
+                </li>
+                <li v-if="storageRows.length === 0" class="storage-empty">{{ t('noProviders') }}</li>
+              </ul>
+            </div>
+            <dl class="storage-facts">
               <div>
                 <dt>{{ t('localBackupPath') }}</dt>
                 <dd>{{ localBackup?.path || '-' }}</dd>
-              </div>
-              <div>
-                <dt>{{ t('backupFiles') }}</dt>
-                <dd>{{ localBackup?.exists ? localBackup.fileCount : 0 }}</dd>
               </div>
               <div>
                 <dt>{{ t('latestBackup') }}</dt>
@@ -1058,40 +1340,39 @@ onUnmounted(() => {
             </dl>
           </article>
 
-          <article class="section-block">
+          <article class="section-block dashboard-card health-card">
             <div class="section-header">
               <div>
-                <p class="eyebrow">Targets</p>
-                <h2>{{ t('backupSources') }}</h2>
+                <p class="eyebrow">{{ t('status') }}</p>
+                <h2>{{ t('systemHealth') }}</h2>
               </div>
             </div>
-            <p class="section-note">{{ t('configuredTargetsOnly') }}</p>
-            <ul class="target-list">
-              <li v-for="target in targets" :key="target.id">
-                <component :is="targetIcon(target)" :size="18" aria-hidden="true" />
-                <div>
-                  <strong>{{ target.name }}</strong>
-                  <span>{{ target.location }}</span>
-                </div>
-                <span :class="['badge', `badge-${target.state}`]">{{ target.state === 'ready' ? t('ready') : t('state') }}</span>
-              </li>
-              <li v-if="targets.length === 0">{{ t('emptyTargets') }}</li>
-            </ul>
-          </article>
-
-          <article class="section-block">
-            <div class="section-header">
+            <div class="health-grid">
+              <article v-for="check in healthCards" :key="check.id" :class="['health-tile', `health-${check.state}`]">
+                <span class="health-icon">
+                  <component :is="check.icon" :size="20" aria-hidden="true" />
+                </span>
+                <span>
+                  <small>{{ check.label }}</small>
+                  <strong>{{ check.value }}</strong>
+                  <em>{{ check.caption }}</em>
+                </span>
+              </article>
+            </div>
+            <dl class="system-info-list">
               <div>
-                <p class="eyebrow">Recent</p>
-                <h2>{{ t('runLogs') }}</h2>
+                <dt>{{ t('systemInfo') }}</dt>
+                <dd>{{ status?.service.mode || '-' }}</dd>
               </div>
-            </div>
-            <ul class="log-list">
-              <li v-for="line in logs.slice(0, 4)" :key="line.id" :class="`log-${line.level}`">
-                <time>{{ line.time }}</time>
-                <span>{{ line.message }}</span>
-              </li>
-            </ul>
+              <div>
+                <dt>{{ t('backupRoot') }}</dt>
+                <dd>{{ status?.config.backupRoot || '-' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('systemTime') }}</dt>
+                <dd>{{ status?.service.localTime || '-' }}</dd>
+              </div>
+            </dl>
           </article>
         </section>
       </section>
