@@ -12,6 +12,7 @@ mysql.cnf
 
 # Logs
 *.log
+*.err
 logs/
 
 # Backup outputs
@@ -20,7 +21,7 @@ logs/
 *.enc
 backup/
 backups/
-driveguard/
+/driveguard/
 
 # Temporary files
 *.tmp
@@ -28,3 +29,14 @@ driveguard/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Web UI
+web/node_modules/
+web/dist/
+web/.vite/
+web/.env.local
+
+# Go backend
+server/bin/
+server/tmp/
+*.exe

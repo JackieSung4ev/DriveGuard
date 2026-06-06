@@ -15,9 +15,9 @@ sudo dg menu
 
 ## ✅ Status
 
-The shell-based version is feature complete for the current scope: install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
+The shell-based version remains the stable command-line version for the current scope: install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
 
-For a future Web UI, keep this repository as a monorepo first: let the shell script stay as the installer/compatibility entrypoint, and introduce Go for the core CLI, API service, and embedded web server. Split repositories later only if the Web UI becomes a separate product line.
+The next generation Web UI is planned inside this repository as a monorepo: `web/` for the Vue 3 + Vite console, `server/` for the Go API service, and `driveguard.sh` kept as the compatibility entrypoint. Split repositories later only if the Web UI becomes a separate product line.
 
 ## ✨ Features
 
@@ -59,6 +59,7 @@ sudo dg install-guard
 | [CentOS Stream 8 + Google Drive setup](docs/initial-setup-centos-google-drive.md) | Full first-time setup from a clean server |
 | [Google Drive rclone setup](docs/google-drive-rclone.md) | OAuth, `root_folder_id`, Windows authorization, and `backup` folder behavior |
 | [Restore backups](docs/restore-backups.md) | Decrypt `.enc` files, extract websites, and import MySQL/PostgreSQL dumps |
+| [Web UI plan](docs/web-ui.md) | Vue 3 + Vite frontend, Go API service, monorepo layout, and security boundary |
 | [Chinese docs](docs/zh-CN/wiki.md) | Chinese documentation |
 
 ## 🧭 Common Commands
@@ -77,6 +78,21 @@ sudo dg install-guard
 | `sudo dg status` | Show current configuration |
 | `sudo dg log 100` | Show recent logs |
 | `sudo dg uninstall` | Remove the script and scheduled jobs |
+
+## Web UI Development
+
+The CLI remains the stable production entrypoint. The next Web UI is split into a Vue frontend and a Go API service:
+
+```bash
+cd server
+go run ./cmd/driveguardd
+
+cd ../web
+npm install
+npm run dev
+```
+
+The Vite dev server proxies `/api` to `http://127.0.0.1:8080`. See [Web UI plan](docs/web-ui.md) for the repository layout and API boundary.
 
 ## 📁 Key Paths
 
