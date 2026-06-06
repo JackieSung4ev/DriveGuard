@@ -73,11 +73,11 @@ If unsure, choose `drive`. Read-only scopes do not work for DriveGuard because i
 - `service_account_file`: leave blank for personal Google OAuth.
 - `Edit advanced config?`: choose `n` for normal backups.
 
-### Back Up into a `backup` Folder
+### Back Up into the Default `driveguard` Folder
 
 There are two common approaches.
 
-The simpler approach is to leave `root_folder_id` blank and set DriveGuard's remote directory to `backup` in `sudo dg configure`. The final layout is:
+The simpler approach is to leave `root_folder_id` blank and keep DriveGuard's remote directory as `driveguard` in `sudo dg configure`. The final layout is:
 
 ```text
 cloud:driveguard/site/
@@ -85,9 +85,9 @@ cloud:driveguard/database/
 cloud:driveguard/database/postgresql/
 ```
 
-DriveGuard creates the folder with `rclone mkdir` before uploading if it does not exist.
+DriveGuard creates the `driveguard` folder with `rclone mkdir` before uploading if it does not exist.
 
-The more restricted approach is to create a `backup` folder in Google Drive, open it in the browser, and copy the folder ID from the URL:
+The more restricted approach is to create a dedicated parent folder in Google Drive, such as `backup`, open it in the browser, and copy the folder ID from the URL:
 
 ```text
 https://drive.google.com/drive/folders/FOLDER_ID_HERE
@@ -101,7 +101,7 @@ backup/driveguard/database/
 backup/driveguard/database/postgresql/
 ```
 
-If you want DriveGuard files directly under `backup/site/` and `backup/database/`, leave the DriveGuard remote directory blank.
+If you want DriveGuard files directly under that parent folder as `site/` and `database/`, leave the DriveGuard remote directory blank.
 
 ## Authorization
 

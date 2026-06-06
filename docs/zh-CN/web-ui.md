@@ -1,67 +1,96 @@
-# DriveGuard Web UI 规划
+# DriveGuard Web UI 指南
 
-DriveGuard 继续保留当前 Bash CLI，作为稳定的命令行版本和安装入口。Web UI 以 monorepo 的方式新增，这样 `dg` 的现有工作流不受影响，同时逐步演进 Go 后端和 Vue 控制台。
+**语言 / Languages:** [中文](web-ui.md) | [English](../web-ui.md)
+
+DriveGuard Web UI 是项目默认的浏览器操作入口。它包含 Vue 控制台、Go API 服务和服务器部署脚本，同时继续复用 CLI 的加密备份引擎。如果你偏好纯终端操作，请阅读 [CLI 指南](cli.md)。
+
+## 安装内容
+
+- `driveguard-web.sh`：Web UI 安装和维护脚本
+- `driveguardd`：本地 Go API 服务
+- Vue 3 + Vite 前端静态资源
+- DriveGuard CLI 引擎，用于备份、cron、恢复和云端操作
+- Linux 服务器上的 systemd API 服务
+
+## 快速开始
+
+```bash
+git clone https://github.com/JackieSung4ev/DriveGuard.git
+cd DriveGuard
+sudo bash driveguard-web.sh install
+```
+
+如果服务器上已经安装过 DriveGuard Web UI，以后更新就运行：
+
+```bash
+cd /opt/driveguard-web
+sudo bash driveguard-web.sh update
+```
+
+未设置 `WEB_ROOT` 时，`install`、`update` 和 `update-frontend` 会自动检测当前把 `/api` 代理到 `driveguardd` 的 Nginx/服务器面板站点目录。只有需要覆盖自动检测结果时，才手动传入 `WEB_ROOT=/path/to/site`。
 
 ## 仓库结构
 
 ```text
-driveguard.sh                 稳定的 Bash CLI 与安装入口
-README.md                     项目概览和快速开始
-docs/                         Wiki 文档
-docs/web-ui.md                Web UI 架构与路线
-docs/zh-CN/web-ui.md          中文 Web UI 规划
+driveguard.sh                 Bash CLI 和备份引擎
+driveguard-web.sh             Web UI 安装和维护脚本
+README.md                     项目概览和产品入口
+docs/                         文档
+docs/web-ui.md                英文 Web UI 指南
+docs/zh-CN/web-ui.md          中文 Web UI 指南
 web/                          Vue 3 + Vite 前端
 server/                       Go API 服务
 ```
 
-后端规划：
+后端结构：
 
 ```text
 server/
   cmd/driveguardd/            HTTP 服务入口
-  internal/api/               路由、handler、响应类型
-  internal/driveguard/        对 DriveGuard 命令的封装
-  internal/jobs/              任务状态管理
+  internal/api/               路由、handler 和响应类型
+  internal/driveguard/        DriveGuard 命令适配层
+  internal/jobs/              进程内任务状态管理
 ```
 
-前端规划：
+前端结构：
 
 ```text
 web/
-  src/App.vue                 控制台外壳和仪表盘
-  src/services/api.ts         API 客户端；只有显式设置 VITE_USE_MOCKS=true 才使用 mock 数据
+  src/App.vue                 控制台外壳和仪表盘视图
+  src/services/api.ts         API 客户端；只有设置 VITE_USE_MOCKS=true 才使用 mock 数据
   src/types.ts                前端共享类型
   src/assets/main.css         设计 token 和响应式布局
 ```
 
 ## 产品边界
 
-第一版 Web UI 是运维控制台，不直接取代 CLI 安装器。主流程要更接近服务器面板插件：
+Web UI 是服务器备份运维控制台，不会替代或隐藏 CLI，而是在稳定 CLI 引擎上提供浏览器工作流：
 
-- 先登录本地管理员账号
-- 支持修改密码和 TOTP 二步验证
-- 先授权云盘
-- 再创建定时备份计划
-- 选择网站、数据库或全量备份
+- 登录本地管理员账号
+- 修改密码并启用 TOTP 二步验证
+- 授权云端存储
+- 创建或编辑定时备份计划
+- 选择网站、数据库或全量备份范围
 - 选择目标云盘和云端目录
-- 上传加密备份文件，在临时目录中解密，然后下载恢复文件
-- 查看最近任务和日志
+- 执行加密备份任务并查看最近任务
+- 查看服务日志和备份日志
+- 通过临时工作目录解密和恢复上传的备份文件
 - 自动识别浏览器语言，并支持手动切换中文/英文
-- 对需要 root 或 Linux 工具的命令返回清晰错误
+- 对需要 root 或 Linux 工具的命令返回清晰 API 错误
 
-后端第一期可以先封装 `driveguard.sh`。等 API 和界面稳定后，再逐步把核心备份逻辑迁移到 Go。
+当前备份计划实现会把 Web UI 表单映射到现有 CLI 的单一计划配置。“保存并启用”会更新 CLI 配置文件，通过 `dg cron` 安装 root crontab，并通过 `dg install-guard` 安装 systemd cron 守护。多计划编排可以在单计划服务器面板流程稳定后再扩展。
 
-第一期云盘先收窄到 Google Drive 和 Microsoft OneDrive，底层仍通过 `rclone` 授权和上传。
+初始云端支持聚焦在 Google Drive 和 Microsoft OneDrive，底层仍通过 `rclone` 授权和上传。其他高级 provider 可以继续通过 CLI 的 `rclone config` 处理。
 
-Google Drive 在服务器配置 `DRIVEGUARD_PUBLIC_URL`、`DRIVEGUARD_GOOGLE_CLIENT_ID` 和 `DRIVEGUARD_GOOGLE_CLIENT_SECRET` 后，可以走 Web OAuth 直连授权。Google OAuth 客户端需要是 Web application 类型，并加入这个 Authorized redirect URI：
+服务器配置 `DRIVEGUARD_PUBLIC_URL`、`DRIVEGUARD_GOOGLE_CLIENT_ID` 和 `DRIVEGUARD_GOOGLE_CLIENT_SECRET` 后，Google Drive 可以使用 Web OAuth 直连授权。Google OAuth client 必须是 Web application 类型，并加入这个 Authorized redirect URI：
 
 ```text
 ${DRIVEGUARD_PUBLIC_URL}/api/v1/cloud/google/callback
 ```
 
-回调会在服务器端交换授权码，并把 token 写入 rclone remote，默认 remote 是 `gdrive:`。如果未配置 Google Web OAuth，授权界面仍回退到三步 CLI 流程：复制指定云盘的 `dg auth` 命令、打开生成的 OAuth 链接、再把跳转后的验证 URL 粘贴回来确认。Web UI 分支里 `sudo dg auth` 会变成云盘选择器，也支持 `sudo dg auth google` 和 `sudo dg auth onedrive` 直接进入指定云盘授权；高级 `rclone config` 仍保留为兜底入口。
+回调会在服务器端交换授权码，并把 token 写入选中的 rclone remote，默认 remote 是 `gdrive:`。如果没有配置 Google Web OAuth，界面会回退到 CLI 风格的授权流程。
 
-## API 初版
+## API 形状
 
 ```text
 GET  /api/v1/health
@@ -87,24 +116,57 @@ GET  /api/v1/jobs/{id}
 POST /api/v1/jobs/backup
 ```
 
-开发阶段默认监听 `127.0.0.1`。正式部署时应放在带 TLS 和认证的反向代理之后。
+开发环境默认监听 `127.0.0.1`。正式部署应放在带 TLS 和认证的反向代理之后。
 
-本地账号系统使用 PBKDF2-HMAC-SHA256 存储密码哈希，使用 HttpOnly SameSite 会话 Cookie，写操作 API 需要 CSRF token，并支持 TOTP 二步验证。认证文件默认在 Linux/macOS 使用 `/etc/driveguard/web-auth.json`，Windows 开发环境使用 `driveguard-auth.json`。
+本地账号系统使用 PBKDF2-HMAC-SHA256 存储密码哈希，使用 HttpOnly SameSite 会话 Cookie，写操作 API 需要 CSRF token，并支持 TOTP 二步验证。认证文件在 Linux/macOS 默认位于 `/etc/driveguard/web-auth.json`，Windows 开发环境使用 `driveguard-auth.json`。
+
+## 部署脚本
+
+`driveguard-web.sh` 让 Web UI 操作和独立 CLI 入口保持分离，同时自动完成服务器侧工作：
+
+- 中英文菜单
+- Go、Node.js、rclone、git、curl、rsync 和 cron 依赖检查
+- 安装 `driveguardd`、systemd 服务、前端构建和静态资源发布
+- 全量更新、仅后端更新、仅前端更新
+- 发布前端时自动检测 Nginx/服务器面板站点根目录
+- API 健康检查、systemd 状态检查和 journal 日志查看
+- Google OAuth 配置，并从 OAuth client JSON 提取 client ID/secret
+- 卸载 Web UI，同时默认保留 CLI 配置和备份文件
+
+常用命令：
+
+```bash
+sudo bash driveguard-web.sh install
+sudo PUBLIC_URL=https://backup.example.com bash driveguard-web.sh oauth /root/client_secret.json
+sudo bash driveguard-web.sh update
+sudo bash driveguard-web.sh status
+sudo bash driveguard-web.sh logs 120
+```
+
+## 本地开发
+
+后端和前端分开运行：
+
+```bash
+cd server
+go run ./cmd/driveguardd
+
+cd ../web
+npm install
+npm run dev
+```
+
+Vite 开发服务器会把 `/api` 代理到 `http://127.0.0.1:8080`。如果只想预览 UI、不启动 Go API，可以运行：
+
+```bash
+cd web
+npm run dev:mock
+```
 
 ## 安全注意
 
-- 没有 TLS 和认证时不要暴露到公网。
+- 没有 TLS 和认证时，不要把 DriveGuard 暴露到公网。
 - API 不返回备份密码、数据库密码、OAuth token 或完整 `rclone.conf`。
 - 恢复/解密上传只能使用临时文件，并在响应结束后删除上传文件和解密文件。
-- 备份、cron、恢复、卸载都属于特权操作。
+- 备份、cron、恢复和卸载都属于特权操作。
 - UI 中的破坏性操作需要明确确认。
-
-## 构建顺序
-
-1. 先做基于页面的 sidebar 导航。
-2. 增加本地管理员登录、修改密码和 TOTP 设置。
-3. 增加 Google Drive 和 OneDrive 授权页面。
-4. 增加网站、数据库、全量备份的定时任务表单，支持每天、每周、每月、间隔和自定义 cron。
-5. 再做 Go HTTP 服务，提供认证、健康检查、状态、云盘、计划、日志和任务接口。
-6. 开发环境通过 Vite proxy 连接 Go 服务。
-7. API 稳定后，再把前端构建产物嵌入或交给 Go 服务托管。

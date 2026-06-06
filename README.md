@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="docs/assets/logo.png" alt="DriveGuard logo" width="180">
+  <img src="docs/assets/logo.png" alt="DriveGuard" width="220">
 </p>
 
 # DriveGuard
 
 **Languages:** [English](README.md) | [中文](docs/zh-CN/README.md)
 
-English is the default project language. Prefer terminal-first backups? Read the [CLI guide](docs/cli.md).
+English is the default project language. DriveGuard is a Web UI-first backup system for Linux servers, with an independent CLI for terminal-first operation. Both product paths use the same encrypted backup engine for websites, MySQL/MariaDB, and PostgreSQL, then upload encrypted files to rclone-compatible cloud storage.
 
 ![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
 ![Remote](https://img.shields.io/badge/remote-rclone-3F79AD)
@@ -14,9 +14,18 @@ English is the default project language. Prefer terminal-first backups? Read the
 ![Encryption](https://img.shields.io/badge/encryption-AES--256--CBC-blue)
 ![Schedule](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
-DriveGuard is a Web UI project for managing encrypted Linux website and database backups. The console helps you connect Google Drive or OneDrive, create scheduled backup plans, inspect run logs, restore encrypted files, and manage local account security while reusing the proven DriveGuard CLI engine under the hood.
+## Product Paths
 
-## 🚀 Web UI Quick Start
+| Path | Best for | Entry point | Guide |
+| --- | --- | --- | --- |
+| Web UI (default) | Browser-based backup plans, cloud authorization, logs, restore actions, and account security | `driveguard-web.sh` | [Web UI guide](docs/web-ui.md) |
+| CLI | SSH-only servers, automation, minimal installations, and terminal-first backups | `driveguard.sh` / `dg` | [CLI guide](docs/cli.md) |
+
+## Web UI
+
+Use the Web UI when you want the DriveGuard console as the main operating surface. It installs the Go API service, publishes the Vue frontend, keeps the CLI backup engine available, and manages the full server-panel workflow from a browser.
+
+### Install
 
 ```bash
 git clone https://github.com/JackieSung4ev/DriveGuard.git
@@ -24,90 +33,85 @@ cd DriveGuard
 sudo bash driveguard-web.sh install
 ```
 
-Already installed on a server? Pull the latest Web UI, backend, CLI wrapper, and published frontend:
+### Update
+
+If DriveGuard Web UI is already installed on a server, update it from the installed source directory:
 
 ```bash
 cd /opt/driveguard-web
 sudo bash driveguard-web.sh update
 ```
 
-Prefer a pure command-line workflow? Read the [CLI guide](docs/cli.md).
+`install`, `update`, and `update-frontend` auto-detect the active Nginx/server-panel site root that proxies `/api` to `driveguardd` when `WEB_ROOT` is not set. Use `WEB_ROOT=/path/to/site` only when you need to override that detection.
 
-## ✅ Status
-
-The Web UI is the main product surface in this repository: `web/` contains the Vue 3 + Vite console, `server/` contains the Go API service, and `driveguard-web.sh` installs and updates the full Web experience.
-
-The shell-based CLI remains the stable compatibility entrypoint for terminal users: install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
-
-## ✨ Features
-
-| Icon | Feature | Summary |
-| --- | --- | --- |
-| ☁️ | Remote storage | Works with Google Drive, OneDrive, Dropbox, S3, WebDAV, SFTP, and other `rclone` remotes |
-| 🌐 | Website backup | Archives each site as `.tar.gz.enc` |
-| 🗄️ | Database backup | Supports MySQL, MariaDB, and PostgreSQL as `.sql.gz.enc` |
-| 🔎 | Auto-discovery | Finds common website roots and non-system databases; PostgreSQL uses `auto` detection by default |
-| 🔐 | Encryption | Uses OpenSSL AES-256-CBC; plaintext is not uploaded |
-| ⏱️ | Scheduling | Installs root crontab entries and an optional systemd cron guard |
-| 🧹 | Retention | Keeps a configurable number of backups per site/database |
-| 🧭 | Management | Provides both a command-line interface and an interactive menu |
-
-## 🧭 Web UI Common Commands
+### Common Web UI Commands
 
 | Command | Purpose |
 | --- | --- |
-| `sudo bash driveguard-web.sh menu` | Open the interactive Web UI installer menu |
-| `sudo bash driveguard-web.sh install` | Install the CLI wrapper, Go API service, and frontend |
-| `cd /opt/driveguard-web && sudo bash driveguard-web.sh update` | Pull the latest main branch and update CLI, backend, and frontend |
+| `sudo bash driveguard-web.sh menu` | Open the interactive Web UI management menu |
+| `sudo bash driveguard-web.sh install` | Install the CLI engine, Go API service, systemd unit, and frontend |
+| `cd /opt/driveguard-web && sudo bash driveguard-web.sh update` | Pull `main` and update CLI, backend, and frontend |
 | `sudo bash driveguard-web.sh update-backend` | Rebuild the Go API service and restart `driveguardd` |
 | `sudo bash driveguard-web.sh update-frontend` | Rebuild and publish the frontend only |
 | `sudo PUBLIC_URL=https://backup.example.com bash driveguard-web.sh oauth /root/client_secret.json` | Configure Google OAuth from a client JSON file |
-| `sudo bash driveguard-web.sh oauth-show` | Show OAuth environment values without printing the secret |
-| `sudo bash driveguard-web.sh status` | Check API health, systemd state, and CLI status |
+| `sudo bash driveguard-web.sh oauth-show` | Show OAuth settings without printing the secret |
+| `sudo bash driveguard-web.sh status` | Check API health, systemd state, and current DriveGuard configuration |
 | `sudo bash driveguard-web.sh logs 120` | Show recent `driveguardd` journal logs |
 | `sudo bash driveguard-web.sh restart` | Restart the backend service |
 | `sudo bash driveguard-web.sh uninstall` | Remove the Web API service and static frontend |
 
-When `WEB_ROOT` is not set, `install`, `update`, and `update-frontend` try to detect the active Nginx/server-panel site root that proxies `/api` to `driveguardd`. Set `WEB_ROOT=/path/to/site` only when you want to override that detection.
+## CLI
 
-## 📚 Documentation
+Use the CLI when you prefer a terminal-only workflow or want DriveGuard without the Web UI service. The CLI can install dependencies, authorize cloud storage, configure backup scope, run backups, install cron, inspect logs, decrypt files, and restore backups.
 
-| Document | When to use it |
+### Quick Start
+
+```bash
+git clone https://github.com/JackieSung4ev/DriveGuard.git
+cd DriveGuard
+sudo bash driveguard.sh install
+sudo dg install-deps
+sudo dg auth google
+sudo dg configure
+sudo dg backup
+```
+
+Enable scheduled backups only after a manual backup succeeds:
+
+```bash
+sudo dg cron
+sudo dg install-guard
+```
+
+### Common CLI Commands
+
+| Command | Purpose |
 | --- | --- |
-| [DriveGuard Wiki](docs/README.md) | Main documentation index |
-| [CentOS Stream 8 + Google Drive setup](docs/initial-setup-centos-google-drive.md) | Full first-time setup from a clean server |
-| [Google Drive rclone setup](docs/google-drive-rclone.md) | OAuth, `root_folder_id`, Windows authorization, and `backup` folder behavior |
-| [Restore backups](docs/restore-backups.md) | Decrypt `.enc` files, extract websites, and import MySQL/PostgreSQL dumps |
-| [CLI guide](docs/cli.md) | Terminal-first install, backup, schedule, logs, and CLI command reference |
-| [Web UI plan](docs/web-ui.md) | Vue 3 + Vite frontend, Go API service, monorepo layout, and security boundary |
-| [Chinese docs](docs/zh-CN/wiki.md) | Chinese documentation |
+| `sudo dg menu` | Open the interactive CLI menu |
+| `sudo dg update` | Pull the latest GitHub version and reinstall the CLI |
+| `sudo dg install-deps` | Install system dependencies |
+| `sudo dg auth` | Choose Google Drive, OneDrive, or advanced `rclone` authorization |
+| `sudo dg configure` | Configure remote storage, encryption password, database access, and schedule |
+| `sudo dg backup` | Run a backup immediately |
+| `sudo dg cron` | Install or update cron jobs |
+| `sudo dg status` | Show the current configuration |
+| `sudo dg log 100` | Show recent DriveGuard logs |
+| `sudo dg decrypt source.enc output` | Decrypt a backup file |
+| `sudo dg uninstall` | Remove the CLI script and scheduled jobs |
 
-## Web UI Development
+See the [CLI guide](docs/cli.md) for the full command reference and terminal-first restore flow.
 
-For local development, run the Go API service and the Vue frontend separately:
+## Backup Model
 
-```bash
-cd server
-go run ./cmd/driveguardd
+DriveGuard encrypts backups before upload. Website archives are stored as `.tar.gz.enc`; MySQL/MariaDB/PostgreSQL dumps are stored as `.sql.gz.enc`. By default, cloud backups are organized under the configured remote directory:
 
-cd ../web
-npm install
-npm run dev
+```text
+remote:driveguard/site/
+remote:driveguard/database/
+remote:driveguard/database/postgresql/
 ```
 
-The Vite dev server proxies `/api` to `http://127.0.0.1:8080`. If you only want to preview the UI without starting the Go API, run `npm run dev:mock` in `web/`. See [Web UI plan](docs/web-ui.md) for the repository layout and API boundary.
-
-## Web UI Deployment Script
-
-The main branch includes a server-side helper for the Web UI product:
-
-```bash
-sudo bash driveguard-web.sh --lang zh menu
-```
-
-The script supports English/Chinese menus, dependency checks, system install, update, uninstall, backend-only updates, frontend-only updates, API health checks, and Google OAuth client ID/secret extraction from a Google OAuth client JSON file. See [Web UI Common Commands](#web-ui-common-commands) for daily operations.
-
-## 📁 Key Paths
+Important local paths:
 
 ```text
 /etc/driveguard/config.conf
@@ -118,19 +122,34 @@ The script supports English/Chinese menus, dependency checks, system install, up
 /var/log/driveguard
 ```
 
-Default remote layout:
+## Local Development
 
-```text
-remote:driveguard/site/
-remote:driveguard/database/
-remote:driveguard/database/postgresql/
+Run the Go API service and Vue frontend separately:
+
+```bash
+cd server
+go run ./cmd/driveguardd
+
+cd ../web
+npm install
+npm run dev
 ```
 
-## 🌐 Language
+The Vite dev server proxies `/api` to `http://127.0.0.1:8080`. To preview the UI without starting the Go API, run `npm run dev:mock` in `web/`.
 
-English is the default language for the project and documentation. Chinese documentation is maintained under [docs/zh-CN](docs/zh-CN/wiki.md).
+## Documentation
 
-## 🔒 Security Notes
+| Document | When to use it |
+| --- | --- |
+| [Documentation index](docs/README.md) | Main wiki-style documentation index |
+| [Web UI guide](docs/web-ui.md) | Web UI architecture, installer, deployment, API boundary, and security notes |
+| [CLI guide](docs/cli.md) | Terminal-first install, backup, schedule, logs, restore, and command reference |
+| [CentOS Stream 8 + Google Drive setup](docs/initial-setup-centos-google-drive.md) | Full first-time setup from a clean server |
+| [Google Drive rclone setup](docs/google-drive-rclone.md) | OAuth, `root_folder_id`, Windows authorization, and Drive folder behavior |
+| [Restore backups](docs/restore-backups.md) | Decrypt `.enc` files, extract websites, and import MySQL/PostgreSQL dumps |
+| [Chinese docs](docs/zh-CN/wiki.md) | Chinese documentation |
+
+## Security Notes
 
 - Do not commit `/etc/driveguard`, `rclone.conf`, OAuth tokens, database passwords, or encryption passwords.
 - Store the backup password offline. Encrypted `.enc` files cannot be restored without it.
