@@ -93,7 +93,7 @@ npm install
 npm run dev
 ```
 
-The Vite dev server proxies `/api` to `http://127.0.0.1:8080`. See [Web UI plan](docs/web-ui.md) for the repository layout and API boundary.
+The Vite dev server proxies `/api` to `http://127.0.0.1:8080`. If you only want to preview the UI without starting the Go API, run `npm run dev:mock` in `web/`. See [Web UI plan](docs/web-ui.md) for the repository layout and API boundary.
 
 ## Web UI Deployment Script
 
