@@ -35,7 +35,6 @@ import {
   Save,
   Server,
   Settings,
-  Shield,
   ShieldCheck,
   Smartphone,
   SquareTerminal,
@@ -1048,26 +1047,6 @@ onUnmounted(() => {
           <span class="nav-label">{{ t('accountSecurity') }}</span>
         </button>
       </nav>
-
-      <div class="sidebar-bottom">
-        <article class="license-card">
-          <span class="license-icon">
-            <Shield :size="20" aria-hidden="true" />
-          </span>
-          <div>
-            <strong>{{ t('professionalEdition') }}</strong>
-            <span>{{ t('webConsole') }}</span>
-          </div>
-        </article>
-        <button class="sidebar-user-card" type="button" @click="goPage('account')">
-          <span class="sidebar-avatar">{{ (authState.username || 'admin').slice(0, 1).toUpperCase() }}</span>
-          <span>
-            <strong>{{ authState.username || 'admin' }}</strong>
-            <small>{{ t('administrator') }}</small>
-          </span>
-          <ChevronDown :size="16" aria-hidden="true" />
-        </button>
-      </div>
 
       <button
         class="sidebar-toggle"
