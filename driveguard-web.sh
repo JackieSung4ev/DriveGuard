@@ -4,7 +4,7 @@ set -Eeuo pipefail
 APP_NAME="driveguard-web"
 SERVICE_NAME="driveguardd"
 REPO_URL="${REPO_URL:-https://github.com/JackieSung4ev/DriveGuard.git}"
-BRANCH="${BRANCH:-feature/web-ui}"
+BRANCH="${BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/driveguard-web}"
 WEB_ROOT="${WEB_ROOT:-/var/www/driveguard}"
 API_ADDR="${DRIVEGUARD_ADDR:-127.0.0.1:8080}"
