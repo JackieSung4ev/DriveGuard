@@ -357,7 +357,26 @@ func defaultArchivePasswordFile() string {
 	return "/etc/driveguard/archive.pass"
 }
 
-var statusLinePattern = regexp.MustCompile(`^\s*([^:]+):\s*(.*)$`)
+var statusLinePattern = regexp.MustCompile(`^\s*([^:：]+)[:：]\s*(.*)$`)
+
+var statusKeyAliases = map[string]string{
+	"配置文件":                "config file",
+	"更新仓库":                "update repository",
+	"远程目录":                "remote directory",
+	"本地目录":                "local directory",
+	"保留份数":                "retention copies",
+	"自动发现网站":              "auto discover websites",
+	"网站根目录":               "website roots",
+	"自动发现数据库":             "auto discover databases",
+	"postgresql 备份":       "postgresql backup",
+	"定时任务":                "cron schedule",
+	"网站列表":                "website list",
+	"mysql/mariadb 数据库列表": "mysql/mariadb database list",
+	"postgresql 数据库列表":    "postgresql database list",
+	"密码文件":                "password file",
+	"mysql 配置":            "mysql config",
+	"postgresql 密码文件":     "postgresql password file",
+}
 
 func parseStatus(output string) map[string]string {
 	values := map[string]string{}
@@ -370,11 +389,19 @@ func parseStatus(output string) map[string]string {
 			continue
 		}
 
-		key := strings.ToLower(strings.TrimSpace(match[1]))
+		key := normalizeStatusKey(match[1])
 		values[key] = strings.TrimSpace(match[2])
 	}
 
 	return values
+}
+
+func normalizeStatusKey(key string) string {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	if alias, ok := statusKeyAliases[normalized]; ok {
+		return alias
+	}
+	return normalized
 }
 
 func applyStatusValues(status *model.DriveGuardStatus, values map[string]string) {

@@ -26,6 +26,34 @@ Current configuration:
 	}
 }
 
+func TestParseChineseStatus(t *testing.T) {
+	values := parseStatus(`
+当前配置：
+  配置文件：/etc/driveguard/config.conf
+  rclone remote：gdrive:
+  远程目录：backup
+  本地目录：/var/backups/driveguard
+  保留份数：7
+  定时任务：0 3 * * *
+  网站列表：/etc/driveguard/sites.list
+  MySQL/MariaDB 数据库列表：/etc/driveguard/databases.list
+  密码文件：/etc/driveguard/archive.pass
+`)
+
+	if got := values["rclone remote"]; got != "gdrive:" {
+		t.Fatalf("rclone remote = %q", got)
+	}
+	if got := values["remote directory"]; got != "backup" {
+		t.Fatalf("remote directory = %q", got)
+	}
+	if got := values["mysql/mariadb database list"]; got != "/etc/driveguard/databases.list" {
+		t.Fatalf("mysql/mariadb database list = %q", got)
+	}
+	if got := values["password file"]; got != "/etc/driveguard/archive.pass" {
+		t.Fatalf("password file = %q", got)
+	}
+}
+
 func TestParseLogLines(t *testing.T) {
 	lines := parseLogLines(`
 [2026-06-06 03:07:15] Uploaded database/store.sql.gz.enc
