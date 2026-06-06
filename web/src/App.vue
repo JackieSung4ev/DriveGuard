@@ -88,7 +88,7 @@ const verificationUrl = ref('')
 const totpSetup = ref<TotpSetupResponse | null>(null)
 const restoreFile = ref<File | null>(null)
 const accountMenuRef = ref<HTMLDetailsElement | null>(null)
-const notificationMenuRef = ref<HTMLElement | null>(null)
+const notificationMenuRef = ref<HTMLDetailsElement | null>(null)
 const languageSelectRef = ref<HTMLSelectElement | null>(null)
 const notificationsOpen = ref(false)
 let noticeTimer: number | undefined
@@ -457,13 +457,17 @@ function closeFloatingControls() {
   if (accountMenuRef.value) {
     accountMenuRef.value.open = false
   }
+  if (notificationMenuRef.value) {
+    notificationMenuRef.value.open = false
+  }
   notificationsOpen.value = false
   languageSelectRef.value?.blur()
 }
 
-function toggleNotifications() {
-  notificationsOpen.value = !notificationsOpen.value
-  if (!notificationsOpen.value) return
+function handleNotificationToggle(event: Event) {
+  const menu = event.currentTarget as HTMLDetailsElement
+  notificationsOpen.value = menu.open
+  if (!menu.open) return
 
   if (accountMenuRef.value) {
     accountMenuRef.value.open = false
@@ -472,6 +476,9 @@ function toggleNotifications() {
 }
 
 function viewNotificationLogs() {
+  if (notificationMenuRef.value) {
+    notificationMenuRef.value.open = false
+  }
   notificationsOpen.value = false
   goPage('logs')
 }
@@ -484,6 +491,7 @@ function handleDocumentPointerDown(event: PointerEvent) {
     accountMenuRef.value.open = false
   }
   if (notificationMenuRef.value && !notificationMenuRef.value.contains(target)) {
+    notificationMenuRef.value.open = false
     notificationsOpen.value = false
   }
   if (languageSelectRef.value && !languageSelectRef.value.contains(target)) {
@@ -1149,20 +1157,18 @@ onUnmounted(() => {
         </div>
 
         <div class="top-actions">
-          <div ref="notificationMenuRef" class="notification-menu">
-            <button
+          <details ref="notificationMenuRef" class="notification-menu" @toggle="handleNotificationToggle">
+            <summary
               :class="['icon-button', 'notification-button', { active: notificationsOpen }]"
-              type="button"
               :aria-label="t('notifications')"
               :aria-expanded="notificationsOpen"
               aria-controls="notification-popover"
               aria-haspopup="dialog"
               :title="t('notifications')"
-              @click="toggleNotifications"
             >
               <Bell :size="18" aria-hidden="true" />
               <span v-if="hasNotifications" class="notification-dot" aria-hidden="true"></span>
-            </button>
+            </summary>
 
             <div
               v-if="notificationsOpen"
@@ -1196,7 +1202,7 @@ onUnmounted(() => {
                 <small>{{ t('notificationEmptyHint') }}</small>
               </div>
             </div>
-          </div>
+          </details>
           <label class="language-control">
             <Languages :size="18" aria-hidden="true" />
             <select ref="languageSelectRef" v-model="locale" :aria-label="t('language')">

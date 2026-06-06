@@ -442,6 +442,14 @@ a {
   background: var(--surface-muted);
 }
 
+.notification-button {
+  list-style: none;
+}
+
+.notification-button::-webkit-details-marker {
+  display: none;
+}
+
 .notification-dot {
   position: absolute;
   top: 10px;
