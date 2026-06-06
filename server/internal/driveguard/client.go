@@ -87,7 +87,7 @@ func (c *Client) Dashboard(ctx context.Context) model.DriveGuardStatus {
 			BackupRoot:      "-",
 			RetentionCopies: 0,
 			Cron:            "-",
-			CronGuard:       "unknown",
+			CronGuard:       c.CronGuardStatus(ctx),
 		},
 		Metrics: model.Metrics{LastRun: now},
 	}
@@ -98,7 +98,7 @@ func (c *Client) Dashboard(ctx context.Context) model.DriveGuardStatus {
 	dashboard.Targets = readTargets(values)
 	dashboard.Metrics = countTargets(dashboard.Metrics, dashboard.Targets)
 	dashboard.Providers = buildProviders(values)
-	dashboard.Plans = DefaultPlans()
+	dashboard.Plans = PlansFromConfig(dashboard.Config)
 	dashboard.Checks = buildChecks(scriptPath, values, err)
 	dashboard.Logs = c.LogLines(ctx, 20)
 
@@ -107,6 +107,150 @@ func (c *Client) Dashboard(ctx context.Context) model.DriveGuardStatus {
 	}
 
 	return dashboard
+}
+
+func (c *Client) EnablePlan(ctx context.Context, plan model.BackupPlan) (model.BackupPlan, error) {
+	remoteName, err := remoteNameForPlan(plan.ProviderID)
+	if err != nil {
+		return model.BackupPlan{}, err
+	}
+	providerID := normalizedProviderID(plan.ProviderID)
+
+	plan.RemotePath = strings.Trim(strings.TrimSpace(plan.RemotePath), "/")
+	if plan.RemotePath == "" {
+		plan.RemotePath = "driveguard"
+	}
+	plan.Cron = strings.TrimSpace(plan.Cron)
+	if !validCron(plan.Cron) {
+		return model.BackupPlan{}, fmt.Errorf("cron expression must contain exactly five fields")
+	}
+	if plan.RetentionCopies < 1 {
+		plan.RetentionCopies = 7
+	}
+	if strings.ContainsAny(plan.RemotePath, "\x00\r\n") {
+		return model.BackupPlan{}, fmt.Errorf("remote directory cannot contain newlines")
+	}
+
+	configPath := c.ConfigFile(ctx)
+	raw, err := os.ReadFile(configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return model.BackupPlan{}, err
+	}
+
+	updates := map[string]string{
+		"RCLONE_REMOTE":      remoteName,
+		"RCLONE_REMOTE_PATH": plan.RemotePath,
+		"KEEP_COPIES":        strconv.Itoa(plan.RetentionCopies),
+		"CRON_EXPR":          plan.Cron,
+		"ENABLE_CRON_GUARD":  "1",
+	}
+	for key, value := range updates {
+		if strings.ContainsAny(value, "\x00\r\n") {
+			return model.BackupPlan{}, fmt.Errorf("%s cannot contain newlines", key)
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+		return model.BackupPlan{}, err
+	}
+	updated := updateShellConfig(string(raw), updates, planConfigKeyOrder)
+	if err := os.WriteFile(configPath, []byte(updated), 0600); err != nil {
+		return model.BackupPlan{}, err
+	}
+
+	commandCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	if output, err := c.Run(commandCtx, "cron"); err != nil {
+		return model.BackupPlan{}, fmt.Errorf("install cron failed: %s", commandError(err, output))
+	}
+	if output, err := c.Run(commandCtx, "install-guard"); err != nil {
+		return model.BackupPlan{}, fmt.Errorf("install cron guard failed: %s", commandError(err, output))
+	}
+
+	plan.ProviderID = providerID
+	plan.Enabled = true
+	plan.State = model.PlanReady
+	plan.NextRun = "installed in cron"
+	plan.LastRun = ""
+	return plan, nil
+}
+
+func (c *Client) ConfigFile(ctx context.Context) string {
+	if configured := strings.TrimSpace(os.Getenv("CONFIG_FILE")); configured != "" {
+		return configured
+	}
+
+	statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	output, _ := c.Run(statusCtx, "status")
+	if configFile := parseStatus(output)["config file"]; configFile != "" {
+		return configFile
+	}
+	if runtime.GOOS == "windows" {
+		return "driveguard-config.conf"
+	}
+	return "/etc/driveguard/config.conf"
+}
+
+func (c *Client) CronGuardStatus(ctx context.Context) string {
+	if runtime.GOOS == "windows" {
+		return "unavailable"
+	}
+
+	statusCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	output, err := c.runCommand(statusCtx, "systemctl", "is-active", "driveguard-cron-guard.timer")
+	state := strings.TrimSpace(output)
+	if err == nil && state == "active" {
+		return "enabled"
+	}
+	if state == "inactive" || state == "failed" {
+		return state
+	}
+	if state != "" {
+		return "unknown"
+	}
+	return "unknown"
+}
+
+func PlansFromConfig(config model.RuntimeConfig) []model.BackupPlan {
+	cron := strings.TrimSpace(config.Cron)
+	if cron == "" || cron == "-" {
+		return nil
+	}
+
+	remote := strings.TrimSuffix(strings.TrimSpace(config.Remote), ":")
+	if remote == "" || remote == "-" {
+		remote = "gdrive"
+	}
+	remotePath := strings.Trim(strings.TrimSpace(config.RemotePath), "/")
+	if remotePath == "" || remotePath == "-" {
+		remotePath = "driveguard"
+	}
+	retention := config.RetentionCopies
+	if retention < 1 {
+		retention = 7
+	}
+
+	return []model.BackupPlan{
+		{
+			ID:              "plan-cli-active",
+			Name:            "DriveGuard scheduled backup",
+			Kind:            model.BackupKindFull,
+			Target:          "all configured websites and databases",
+			ProviderID:      providerIDForRemote(remote),
+			RemotePath:      remotePath,
+			Cron:            cron,
+			RetentionCopies: retention,
+			Encrypted:       true,
+			Enabled:         true,
+			State:           model.PlanReady,
+			NextRun:         "installed in cron",
+			LastRun:         "",
+		},
+	}
 }
 
 func DefaultPlans() []model.BackupPlan {
@@ -653,6 +797,149 @@ func providerRemoteName(remote, fallback string) string {
 		return fallback
 	}
 	return remote
+}
+
+var planConfigKeyOrder = []string{
+	"RCLONE_REMOTE",
+	"RCLONE_REMOTE_PATH",
+	"KEEP_COPIES",
+	"CRON_EXPR",
+	"ENABLE_CRON_GUARD",
+}
+
+func updateShellConfig(raw string, updates map[string]string, order []string) string {
+	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
+	result := []string{}
+	seen := map[string]bool{}
+
+	for _, line := range lines {
+		key, ok := shellAssignmentKey(line)
+		if !ok {
+			result = append(result, line)
+			continue
+		}
+
+		value, shouldUpdate := updates[key]
+		if !shouldUpdate {
+			result = append(result, line)
+			continue
+		}
+
+		result = append(result, key+"="+shellQuote(value))
+		seen[key] = true
+	}
+
+	for len(result) > 0 && strings.TrimSpace(result[len(result)-1]) == "" {
+		result = result[:len(result)-1]
+	}
+	if len(result) == 0 {
+		result = append(result, "# DriveGuard configuration file, updated by web UI")
+	}
+
+	for _, key := range order {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		value, ok := updates[key]
+		if !ok {
+			continue
+		}
+		result = append(result, key+"="+shellQuote(value))
+	}
+
+	return strings.Join(result, "\n") + "\n"
+}
+
+func shellAssignmentKey(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+		return "", false
+	}
+
+	index := strings.Index(trimmed, "=")
+	if index <= 0 {
+		return "", false
+	}
+
+	key := trimmed[:index]
+	for _, char := range key {
+		if (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '_' {
+			continue
+		}
+		return "", false
+	}
+	return key, true
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+func validCron(expr string) bool {
+	if strings.ContainsAny(expr, "\x00\r\n") {
+		return false
+	}
+	return len(strings.Fields(expr)) == 5
+}
+
+func remoteNameForPlan(providerID string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(strings.TrimSuffix(providerID, ":")))
+	switch normalized {
+	case "google", "google-drive", "gdrive", "drive":
+		return cleanRemoteName(envOrDefault("DRIVEGUARD_GOOGLE_REMOTE", "gdrive"))
+	case "onedrive", "one-drive", "microsoft", "microsoft-onedrive":
+		return cleanRemoteName(envOrDefault("DRIVEGUARD_ONEDRIVE_REMOTE", "onedrive"))
+	default:
+		return cleanRemoteName(normalized)
+	}
+}
+
+func cleanRemoteName(remoteName string) (string, error) {
+	remoteName = strings.TrimSpace(strings.TrimSuffix(remoteName, ":"))
+	if remoteName == "" {
+		return "", fmt.Errorf("rclone remote name is required")
+	}
+	if strings.ContainsAny(remoteName, "[]:/\\\x00\r\n") {
+		return "", fmt.Errorf("invalid rclone remote name")
+	}
+	return remoteName, nil
+}
+
+func providerIDForRemote(remote string) string {
+	normalized := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(remote), ":"))
+	switch {
+	case strings.Contains(normalized, "one"):
+		return "onedrive"
+	case strings.Contains(normalized, "google"), strings.Contains(normalized, "gdrive"), strings.Contains(normalized, "drive"):
+		return "google-drive"
+	default:
+		return "google-drive"
+	}
+}
+
+func normalizedProviderID(providerID string) string {
+	normalized := strings.ToLower(strings.TrimSpace(providerID))
+	switch normalized {
+	case "onedrive", "one-drive", "microsoft", "microsoft-onedrive":
+		return "onedrive"
+	default:
+		return "google-drive"
+	}
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func commandError(err error, output string) string {
+	message := strings.TrimSpace(trimOutput(output))
+	if message == "" {
+		return err.Error()
+	}
+	return message
 }
 
 func sanitizeID(value string) string {

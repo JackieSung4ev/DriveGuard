@@ -441,7 +441,7 @@ async function savePlan() {
       }
     }
 
-    const response = await createBackupPlan({
+    await createBackupPlan({
       name: planForm.name,
       kind: planForm.kind,
       target: planForm.target,
@@ -453,9 +453,7 @@ async function savePlan() {
       enabled: true
     })
 
-    if (status.value) {
-      status.value.plans = [response.plan, ...status.value.plans]
-    }
+    await refreshStatus()
     notice.value = t('planSaved')
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('savePlanFailed')
@@ -633,6 +631,12 @@ function planKindLabel(kind: BackupKind) {
   if (kind === 'website') return t('website')
   if (kind === 'database') return t('database')
   return t('full')
+}
+
+function planStateLabel(state: string) {
+  if (state === 'draft') return t('draft')
+  if (state === 'disabled') return t('disabled')
+  return t('enabled')
 }
 
 function providerName(providerId: string) {
@@ -1162,7 +1166,7 @@ onUnmounted(() => {
                   <td>{{ providerName(plan.providerId) }}</td>
                   <td>{{ readableSchedule(plan.cron) }}</td>
                   <td>{{ t('keepCopies', { count: plan.retentionCopies }) }}</td>
-                  <td><span :class="['badge', `badge-${plan.state}`]">{{ plan.state === 'draft' ? t('draft') : t('enabled') }}</span></td>
+                  <td><span :class="['badge', `badge-${plan.state}`]">{{ planStateLabel(plan.state) }}</span></td>
                 </tr>
               </tbody>
             </table>

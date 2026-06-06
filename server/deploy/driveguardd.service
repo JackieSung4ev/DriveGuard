@@ -1,0 +1,22 @@
+[Unit]
+Description=DriveGuard Web API
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Environment=DRIVEGUARD_ADDR=127.0.0.1:8080
+Environment=DRIVEGUARD_SCRIPT=/usr/local/bin/dg
+Environment=DRIVEGUARD_AUTH_FILE=/etc/driveguard/web-auth.json
+EnvironmentFile=-/etc/driveguard/driveguardd.env
+ExecStart=/usr/local/bin/driveguardd
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=10
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

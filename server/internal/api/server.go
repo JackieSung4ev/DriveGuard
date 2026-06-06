@@ -106,7 +106,9 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	status := s.driveguard.Dashboard(r.Context())
 	status.Jobs = s.jobs.List()
-	status.Plans = s.plans.List()
+	if planList := s.plans.List(); len(planList) > 0 {
+		status.Plans = planList
+	}
 	writeJSON(w, http.StatusOK, status)
 }
 
@@ -385,8 +387,12 @@ func (s *Server) handleArchivePassword(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleBackupPlans(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
+		status := s.driveguard.Dashboard(r.Context())
+		if planList := s.plans.List(); len(planList) > 0 {
+			status.Plans = planList
+		}
 		writeJSON(w, http.StatusOK, map[string][]model.BackupPlan{
-			"plans": s.plans.List(),
+			"plans": status.Plans,
 		})
 	case http.MethodPost:
 		var plan model.BackupPlan
@@ -395,13 +401,30 @@ func (s *Server) handleBackupPlans(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		created, err := s.plans.Add(plan)
+		prepared, err := plans.Prepare(plan)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, plans.ErrInvalidPlan) {
 				status = http.StatusBadRequest
 			}
 			writeError(w, status, err.Error())
+			return
+		}
+
+		if prepared.Enabled {
+			enabled, err := s.driveguard.EnablePlan(r.Context(), prepared)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			s.plans.SetActive(enabled)
+			writeJSON(w, http.StatusCreated, map[string]model.BackupPlan{"plan": enabled})
+			return
+		}
+
+		created, err := s.plans.Add(prepared)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]model.BackupPlan{"plan": created})

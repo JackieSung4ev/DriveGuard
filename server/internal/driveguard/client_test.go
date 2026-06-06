@@ -1,6 +1,7 @@
 package driveguard
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/JackieSung4ev/gdrive/server/internal/model"
@@ -68,5 +69,51 @@ func TestParseLogLines(t *testing.T) {
 	}
 	if lines[1].Level != model.LogWarning {
 		t.Fatalf("second level = %q", lines[1].Level)
+	}
+}
+
+func TestUpdateShellConfig(t *testing.T) {
+	updated := updateShellConfig(`# existing
+BACKUP_ROOT=/var/backups/driveguard
+RCLONE_REMOTE=cloud
+KEEP_COPIES=3
+`, map[string]string{
+		"RCLONE_REMOTE":      "gdrive",
+		"RCLONE_REMOTE_PATH": "backup path",
+		"KEEP_COPIES":        "7",
+		"CRON_EXPR":          "30 2 * * *",
+		"ENABLE_CRON_GUARD":  "1",
+	}, planConfigKeyOrder)
+
+	for _, expected := range []string{
+		"BACKUP_ROOT=/var/backups/driveguard",
+		"RCLONE_REMOTE='gdrive'",
+		"RCLONE_REMOTE_PATH='backup path'",
+		"KEEP_COPIES='7'",
+		"CRON_EXPR='30 2 * * *'",
+		"ENABLE_CRON_GUARD='1'",
+	} {
+		if !strings.Contains(updated, expected) {
+			t.Fatalf("updated config does not contain %q:\n%s", expected, updated)
+		}
+	}
+}
+
+func TestPlansFromConfig(t *testing.T) {
+	plans := PlansFromConfig(model.RuntimeConfig{
+		Remote:          "gdrive:",
+		RemotePath:      "backup",
+		RetentionCopies: 3,
+		Cron:            "0 3 * * *",
+	})
+
+	if len(plans) != 1 {
+		t.Fatalf("len(plans) = %d", len(plans))
+	}
+	if !plans[0].Enabled || plans[0].State != model.PlanReady {
+		t.Fatalf("plan not enabled: %+v", plans[0])
+	}
+	if plans[0].ProviderID != "google-drive" || plans[0].RemotePath != "backup" || plans[0].RetentionCopies != 3 {
+		t.Fatalf("plan values = %+v", plans[0])
 	}
 }

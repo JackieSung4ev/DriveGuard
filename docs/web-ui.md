@@ -51,6 +51,8 @@ The first Web UI version is an operations console, not a replacement for the CLI
 
 The backend can initially wrap `driveguard.sh` commands. Core backup logic can move into Go later after the API surface is stable.
 
+The current scheduled-plan implementation intentionally maps the Web UI plan form to the existing single CLI schedule. "Save and enable" updates the CLI config file, installs the root crontab entry with `dg cron`, and installs the systemd cron guard with `dg install-guard`. Multi-plan orchestration can be added later, after the one-plan server-panel workflow is reliable.
+
 Initial provider support is intentionally narrow: Google Drive and Microsoft OneDrive through `rclone`.
 
 Google Drive can use direct Web OAuth when the server has `DRIVEGUARD_PUBLIC_URL`, `DRIVEGUARD_GOOGLE_CLIENT_ID`, and `DRIVEGUARD_GOOGLE_CLIENT_SECRET` configured. The Google OAuth client must be a Web application client with this authorized redirect URI:

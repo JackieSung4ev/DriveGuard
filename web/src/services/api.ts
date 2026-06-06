@@ -136,8 +136,8 @@ function mockResponse<T>(path: string, init?: RequestInit): T {
       plan: {
         ...payload,
         id: `mock-plan-${Date.now()}`,
-        state: 'draft',
-        nextRun: '保存后等待安装 cron',
+        state: payload.enabled ? 'ready' : 'draft',
+        nextRun: payload.enabled ? 'installed in cron' : 'after cron install',
         lastRun: ''
       }
     } as T

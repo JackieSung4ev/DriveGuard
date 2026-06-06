@@ -29,6 +29,27 @@ func (m *Manager) List() []model.BackupPlan {
 }
 
 func (m *Manager) Add(plan model.BackupPlan) (model.BackupPlan, error) {
+	plan, err := Prepare(plan)
+	if err != nil {
+		return model.BackupPlan{}, err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.plans = append([]model.BackupPlan{plan}, m.plans...)
+	return plan, nil
+}
+
+func (m *Manager) SetActive(plan model.BackupPlan) model.BackupPlan {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.plans = []model.BackupPlan{plan}
+	return plan
+}
+
+func Prepare(plan model.BackupPlan) (model.BackupPlan, error) {
 	if strings.TrimSpace(plan.Name) == "" || strings.TrimSpace(plan.ProviderID) == "" {
 		return model.BackupPlan{}, ErrInvalidPlan
 	}
@@ -51,9 +72,5 @@ func (m *Manager) Add(plan model.BackupPlan) (model.BackupPlan, error) {
 	plan.NextRun = "after cron install"
 	plan.LastRun = ""
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.plans = append([]model.BackupPlan{plan}, m.plans...)
 	return plan, nil
 }

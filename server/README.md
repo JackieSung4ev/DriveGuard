@@ -31,6 +31,44 @@ If the Google client is not configured, the Web UI falls back to the CLI `sudo d
 
 The first API version wraps the existing `driveguard.sh` commands. Run it on the target Linux host with the permissions required by the selected DriveGuard action.
 
+## Scheduled Plans
+
+`POST /api/v1/backup-plans` now has a real enable path. When the request sends `enabled: true`, the API updates the existing DriveGuard CLI config and runs the stable CLI commands:
+
+```text
+dg cron
+dg install-guard
+```
+
+The Web UI currently controls the same single global schedule used by the CLI. Saving and enabling a Web plan updates `RCLONE_REMOTE`, `RCLONE_REMOTE_PATH`, `KEEP_COPIES`, `CRON_EXPR`, and `ENABLE_CRON_GUARD` in the CLI config file, then installs the root crontab entry and the systemd cron guard timer.
+
+Because those actions write `/etc/driveguard`, root crontab, and `/etc/systemd/system`, run `driveguardd` as a privileged service on production hosts.
+
+## Systemd Process Guard
+
+A production unit template is available at `server/deploy/driveguardd.service`.
+
+```bash
+sudo install -m 0755 /opt/driveguard-web/server/driveguardd /usr/local/bin/driveguardd
+sudo install -m 0644 /opt/driveguard-web/server/deploy/driveguardd.service /etc/systemd/system/driveguardd.service
+sudo install -d -m 0700 /etc/driveguard
+sudo touch /etc/driveguard/driveguardd.env
+sudo chmod 600 /etc/driveguard/driveguardd.env
+sudo systemctl daemon-reload
+sudo systemctl enable --now driveguardd
+sudo systemctl status driveguardd
+```
+
+Put deployment-specific values and OAuth secrets in `/etc/driveguard/driveguardd.env`, for example:
+
+```text
+DRIVEGUARD_PUBLIC_URL=https://backup.example.com
+DRIVEGUARD_GOOGLE_CLIENT_ID=your-google-oauth-client-id
+DRIVEGUARD_GOOGLE_CLIENT_SECRET=your-google-oauth-client-secret
+DRIVEGUARD_GOOGLE_REMOTE=gdrive
+DRIVEGUARD_GOOGLE_SCOPE=drive.file
+```
+
 Endpoints:
 
 ```text
