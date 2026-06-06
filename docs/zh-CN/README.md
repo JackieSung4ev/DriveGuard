@@ -2,7 +2,7 @@
   <img src="../assets/logo.png" alt="DriveGuard" width="220">
 </p>
 
-# DriveGuard
+<h1 align="center">DriveGuard</h1>
 
 **语言 / Languages:** [中文](README.md) | [English](../../README.md)
 
