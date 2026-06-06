@@ -6,7 +6,7 @@
 
 **Languages:** [English](README.md) | [中文](docs/zh-CN/README.md)
 
-English is the default project language. Prefer the command-line version? Go to the [CLI quick start](#cli-quick-start).
+English is the default project language. Prefer terminal-first backups? The [CLI quick start](#cli-quick-start) is still simple and fully supported.
 
 ![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
 ![Remote](https://img.shields.io/badge/remote-rclone-3F79AD)
@@ -14,18 +14,29 @@ English is the default project language. Prefer the command-line version? Go to 
 ![Encryption](https://img.shields.io/badge/encryption-AES--256--CBC-blue)
 ![Schedule](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
-DriveGuard is a standalone Linux backup script for websites and databases. It uses `rclone` to upload encrypted backups to Google Drive, OneDrive, Dropbox, S3, WebDAV, SFTP, or any other compatible remote.
+DriveGuard is a Web UI project for managing encrypted Linux website and database backups. The console helps you connect Google Drive or OneDrive, create scheduled backup plans, inspect run logs, restore encrypted files, and manage local account security while reusing the proven DriveGuard CLI engine under the hood.
+
+## 🚀 Web UI Quick Start
 
 ```bash
-sudo bash driveguard.sh install
-sudo dg menu
+git clone https://github.com/JackieSung4ev/DriveGuard.git
+cd DriveGuard
+sudo bash driveguard-web.sh install
 ```
+
+Already installed on a server? Pull the latest Web UI, backend, CLI wrapper, and published frontend:
+
+```bash
+sudo BRANCH=main bash driveguard-web.sh update
+```
+
+Prefer a pure command-line workflow? Jump to the [CLI quick start](#cli-quick-start).
 
 ## ✅ Status
 
-The shell-based CLI remains the stable command-line version for install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
+The Web UI is the main product surface in this repository: `web/` contains the Vue 3 + Vite console, `server/` contains the Go API service, and `driveguard-web.sh` installs and updates the full Web experience.
 
-The Web UI is now part of the main repository: `web/` contains the Vue 3 + Vite console, `server/` contains the Go API service, and `driveguard.sh` remains the compatibility entrypoint. The Web workflow focuses on local account security, Google Drive and Microsoft OneDrive authorization, scheduled backup plans, logs, and restore helpers.
+The shell-based CLI remains the stable compatibility entrypoint for terminal users: install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
 
 ## ✨ Features
 

@@ -7,7 +7,7 @@
 
 **语言 / Languages:** [中文](README.md) | [English](../../README.md)
 
-英语是项目默认语言。想使用纯命令行版本？请查看 [CLI 快速开始](#-cli-快速开始)。
+英语是项目默认语言。偏好终端方式备份？[CLI 快速开始](#-cli-快速开始) 依然简单并完整支持。
 
 ![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
 ![Remote](https://img.shields.io/badge/remote-rclone-3F79AD)
@@ -15,18 +15,29 @@
 ![Encryption](https://img.shields.io/badge/encryption-AES--256--CBC-blue)
 ![Schedule](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
-DriveGuard 是一个面向 Linux 服务器的独立云端备份脚本。它通过 `rclone` 连接云盘、对象存储或远程文件系统，并把网站目录、MySQL/MariaDB/PostgreSQL 数据库加密后上传。
+DriveGuard 是一个面向 Linux 服务器备份管理的 Web UI 项目。控制台可以连接 Google Drive 或 OneDrive、创建定时备份计划、查看运行日志、解密恢复文件，并管理本地账号安全；底层继续复用稳定的 DriveGuard CLI 备份引擎。
+
+## 🚀 Web UI 快速开始
 
 ```bash
-sudo bash driveguard.sh install
-sudo dg menu
+git clone https://github.com/JackieSung4ev/DriveGuard.git
+cd DriveGuard
+sudo bash driveguard-web.sh install
 ```
+
+服务器上已经安装过？可以一条命令更新 Web UI、后端、CLI 包装脚本和发布后的前端：
+
+```bash
+sudo BRANCH=main bash driveguard-web.sh update
+```
+
+想使用纯命令行流程？请跳到 [CLI 快速开始](#-cli-快速开始)。
 
 ## ✅ 当前状态
 
-脚本版 DriveGuard 仍是稳定的命令行版本：安装、配置、加密备份、自动发现、定时任务、云端上传、保留清理、解密恢复和更新脚本都已覆盖。
+Web UI 是这个仓库的主要产品入口：`web/` 是 Vue 3 + Vite 控制台，`server/` 是 Go API 服务，`driveguard-web.sh` 负责安装和更新完整 Web 体验。
 
-Web UI 现在已经进入主线仓库：`web/` 是 Vue 3 + Vite 控制台，`server/` 是 Go API 服务，`driveguard.sh` 继续作为兼容入口。Web 流程聚焦本地账号安全、Google Drive 和 Microsoft OneDrive 授权、定时备份计划、运行日志和解密恢复。
+脚本版 CLI 仍是稳定的兼容入口，适合偏好终端的用户：安装、配置、加密备份、自动发现、定时任务、云端上传、保留清理、解密恢复和更新脚本都已覆盖。
 
 ## ✨ 核心能力
 
