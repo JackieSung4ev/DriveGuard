@@ -873,8 +873,14 @@ discover_postgres_databases() {
 
 remote_dir_for() {
   local subdir="$1"
-  if [[ -n "$RCLONE_REMOTE_PATH" ]]; then
-    printf '%s:%s/%s\n' "$RCLONE_REMOTE" "${RCLONE_REMOTE_PATH%/}" "$subdir"
+  local base="${RCLONE_REMOTE_PATH#/}"
+  base="${base%/}"
+  subdir="${subdir#/}"
+  subdir="${subdir%/}"
+  if [[ -n "$base" && -n "$subdir" ]]; then
+    printf '%s:%s/%s\n' "$RCLONE_REMOTE" "$base" "$subdir"
+  elif [[ -n "$base" ]]; then
+    printf '%s:%s\n' "$RCLONE_REMOTE" "$base"
   else
     printf '%s:%s\n' "$RCLONE_REMOTE" "$subdir"
   fi

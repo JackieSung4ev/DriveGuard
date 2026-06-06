@@ -131,6 +131,71 @@ func TestPlansFromConfig(t *testing.T) {
 	}
 }
 
+func TestReadTargetsIncludesLocalDatabaseBackups(t *testing.T) {
+	dir := t.TempDir()
+	mysqlDir := filepath.Join(dir, "database", "ketowe_com")
+	postgresDir := filepath.Join(dir, "database", "postgresql", "analytics")
+	if err := os.MkdirAll(mysqlDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(postgresDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mysqlDir, "Db_ketowe_com_20260606_091112.sql.gz.enc"), []byte("mysql"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(postgresDir, "Pg_analytics_20260606_091200.sql.gz.enc"), []byte("postgres"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	targets := readTargets(map[string]string{"local directory": dir})
+	if !hasTarget(targets, model.TargetMySQL, "ketowe_com") {
+		t.Fatalf("mysql local backup target not found: %+v", targets)
+	}
+	if !hasTarget(targets, model.TargetPostgreSQL, "analytics") {
+		t.Fatalf("postgres local backup target not found: %+v", targets)
+	}
+}
+
+func TestReadTargetsDoesNotDuplicateConfiguredDatabase(t *testing.T) {
+	dir := t.TempDir()
+	databaseList := filepath.Join(dir, "databases.list")
+	mysqlDir := filepath.Join(dir, "backup", "database", "ketowe_com")
+	if err := os.MkdirAll(mysqlDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(databaseList, []byte("ketowe_com\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(mysqlDir, "Db_ketowe_com_20260606_091112.sql.gz.enc"), []byte("mysql"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	targets := readTargets(map[string]string{
+		"mysql/mariadb database list": databaseList,
+		"local directory":             filepath.Join(dir, "backup"),
+	})
+
+	count := 0
+	for _, target := range targets {
+		if target.Type == model.TargetMySQL && target.Name == "ketowe_com" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("configured database target count = %d, targets = %+v", count, targets)
+	}
+}
+
+func hasTarget(targets []model.BackupTarget, targetType model.TargetType, name string) bool {
+	for _, target := range targets {
+		if target.Type == targetType && target.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func TestInspectLocalBackup(t *testing.T) {
 	dir := t.TempDir()
 	oldFile := filepath.Join(dir, "old.enc")

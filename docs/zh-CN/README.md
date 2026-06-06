@@ -1,6 +1,13 @@
+<p align="center">
+  <img src="../assets/favicon.jpg" alt="DriveGuard favicon" width="48"><br>
+  <img src="../assets/logo.png" alt="DriveGuard logo" width="180">
+</p>
+
 # DriveGuard
 
 **语言 / Languages:** [中文](README.md) | [English](../../README.md)
+
+英语是项目默认语言。想使用纯命令行版本？请查看 [CLI 快速开始](#-cli-快速开始)。
 
 ![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
 ![Remote](https://img.shields.io/badge/remote-rclone-3F79AD)
@@ -17,9 +24,9 @@ sudo dg menu
 
 ## ✅ 当前状态
 
-脚本版 DriveGuard 的核心闭环已经完整：安装、配置、加密备份、自动发现、定时任务、云端上传、保留清理、解密恢复和更新脚本都已覆盖。
+脚本版 DriveGuard 仍是稳定的命令行版本：安装、配置、加密备份、自动发现、定时任务、云端上传、保留清理、解密恢复和更新脚本都已覆盖。
 
-后续如果做 Web UI，建议先保持同仓库演进：Shell 继续做安装器，Go 承接核心命令、API 和 Web 服务。等 Web UI 成为独立产品线后，再考虑拆仓库。
+Web UI 现在已经进入主线仓库：`web/` 是 Vue 3 + Vite 控制台，`server/` 是 Go API 服务，`driveguard.sh` 继续作为兼容入口。Web 流程聚焦本地账号安全、Google Drive 和 Microsoft OneDrive 授权、定时备份计划、运行日志和解密恢复。
 
 ## ✨ 核心能力
 
@@ -34,7 +41,7 @@ sudo dg menu
 | 🧹 | 保留 | 每个站点、每个数据库分别保留指定份数 |
 | 🧭 | 管理 | 中文菜单和命令行子命令都可用 |
 
-## 🚀 快速开始
+## 🚀 CLI 快速开始
 
 ```bash
 git clone https://github.com/JackieSung4ev/DriveGuard.git

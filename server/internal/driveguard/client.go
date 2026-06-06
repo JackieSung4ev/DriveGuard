@@ -735,6 +735,7 @@ func readTargets(values map[string]string) []model.BackupTarget {
 	targets = append(targets, readSiteTargets(values["website list"])...)
 	targets = append(targets, readDatabaseTargets(values["mysql/mariadb database list"], model.TargetMySQL)...)
 	targets = append(targets, readDatabaseTargets(values["postgresql database list"], model.TargetPostgreSQL)...)
+	targets = append(targets, readLocalDatabaseTargets(values["local directory"], targets)...)
 	return targets
 }
 
@@ -809,6 +810,142 @@ func readDatabaseTargets(path string, targetType model.TargetType) []model.Backu
 	}
 
 	return targets
+}
+
+func readLocalDatabaseTargets(root string, existing []model.BackupTarget) []model.BackupTarget {
+	root = strings.TrimSpace(root)
+	if root == "" || root == "-" {
+		return nil
+	}
+
+	seen := map[string]bool{}
+	for _, target := range existing {
+		if target.Type == model.TargetMySQL || target.Type == model.TargetPostgreSQL {
+			seen[targetKey(target.Type, target.Name)] = true
+		}
+	}
+
+	databaseRoot := filepath.Join(root, "database")
+	targets := []model.BackupTarget{}
+	targets = append(targets, readLocalDatabaseBackupTargets(databaseRoot, model.TargetMySQL, seen)...)
+	targets = append(targets, readLocalDatabaseBackupTargets(filepath.Join(databaseRoot, "postgresql"), model.TargetPostgreSQL, seen)...)
+	return targets
+}
+
+func readLocalDatabaseBackupTargets(root string, targetType model.TargetType, seen map[string]bool) []model.BackupTarget {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+
+	targets := []model.BackupTarget{}
+	for _, entry := range entries {
+		if targetType == model.TargetMySQL && entry.IsDir() && strings.EqualFold(entry.Name(), "postgresql") {
+			continue
+		}
+
+		if entry.IsDir() {
+			latestFile, latestTime := latestEncryptedBackup(filepath.Join(root, entry.Name()))
+			if latestFile == "" {
+				continue
+			}
+			if target := localDatabaseTarget(targetType, entry.Name(), latestFile, latestTime, seen); target.ID != "" {
+				targets = append(targets, target)
+			}
+			continue
+		}
+
+		name := databaseNameFromBackupFile(entry.Name(), targetType)
+		if name == "" {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if target := localDatabaseTarget(targetType, name, filepath.Join(root, entry.Name()), info.ModTime(), seen); target.ID != "" {
+			targets = append(targets, target)
+		}
+	}
+	return targets
+}
+
+func localDatabaseTarget(targetType model.TargetType, name, latestFile string, latestTime time.Time, seen map[string]bool) model.BackupTarget {
+	key := targetKey(targetType, name)
+	if seen[key] {
+		return model.BackupTarget{}
+	}
+	seen[key] = true
+
+	return model.BackupTarget{
+		ID:         fmt.Sprintf("%s-%s", targetType, sanitizeID(name)),
+		Name:       name,
+		Type:       targetType,
+		Location:   "local backup history",
+		State:      model.TargetReady,
+		LastBackup: latestTime.Format(time.RFC3339),
+		Size:       backupFileSize(latestFile),
+	}
+}
+
+func latestEncryptedBackup(root string) (string, time.Time) {
+	var latestFile string
+	var latestTime time.Time
+	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".enc") {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil
+		}
+		if info.ModTime().After(latestTime) {
+			latestFile = path
+			latestTime = info.ModTime()
+		}
+		return nil
+	})
+	return latestFile, latestTime
+}
+
+func databaseNameFromBackupFile(name string, targetType model.TargetType) string {
+	var prefix string
+	switch targetType {
+	case model.TargetPostgreSQL:
+		prefix = "Pg_"
+	default:
+		prefix = "Db_"
+	}
+	if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(strings.ToLower(name), ".sql.gz.enc") {
+		return ""
+	}
+
+	trimmed := strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".sql.gz.enc")
+	parts := strings.Split(trimmed, "_")
+	if len(parts) < 3 {
+		return ""
+	}
+	datePart := parts[len(parts)-2]
+	timePart := parts[len(parts)-1]
+	if len(datePart) != 8 || len(timePart) != 6 {
+		return ""
+	}
+	return strings.Join(parts[:len(parts)-2], "_")
+}
+
+func backupFileSize(path string) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "-"
+	}
+	return strconv.FormatInt(info.Size(), 10) + " B"
+}
+
+func targetKey(targetType model.TargetType, name string) string {
+	return string(targetType) + "\x00" + strings.ToLower(strings.TrimSpace(name))
 }
 
 func countTargets(metrics model.Metrics, targets []model.BackupTarget) model.Metrics {

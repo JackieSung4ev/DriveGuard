@@ -1,6 +1,13 @@
+<p align="center">
+  <img src="docs/assets/favicon.jpg" alt="DriveGuard favicon" width="48"><br>
+  <img src="docs/assets/logo.png" alt="DriveGuard logo" width="180">
+</p>
+
 # DriveGuard
 
 **Languages:** [English](README.md) | [中文](docs/zh-CN/README.md)
+
+English is the default project language. Prefer the command-line version? Go to the [CLI quick start](#cli-quick-start).
 
 ![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
 ![Remote](https://img.shields.io/badge/remote-rclone-3F79AD)
@@ -17,9 +24,9 @@ sudo dg menu
 
 ## ✅ Status
 
-The shell-based version remains the stable command-line version for the current scope: install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
+The shell-based CLI remains the stable command-line version for install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
 
-The next generation Web UI is planned inside this repository as a monorepo: `web/` for the Vue 3 + Vite console, `server/` for the Go API service, and `driveguard.sh` kept as the compatibility entrypoint. The first Web workflow focuses on local account security, Google Drive and Microsoft OneDrive authorization, and scheduled backup plans. Split repositories later only if the Web UI becomes a separate product line.
+The Web UI is now part of the main repository: `web/` contains the Vue 3 + Vite console, `server/` contains the Go API service, and `driveguard.sh` remains the compatibility entrypoint. The Web workflow focuses on local account security, Google Drive and Microsoft OneDrive authorization, scheduled backup plans, logs, and restore helpers.
 
 ## ✨ Features
 
@@ -34,7 +41,7 @@ The next generation Web UI is planned inside this repository as a monorepo: `web
 | 🧹 | Retention | Keeps a configurable number of backups per site/database |
 | 🧭 | Management | Provides both a command-line interface and an interactive menu |
 
-## 🚀 Quick Start
+## 🚀 CLI Quick Start
 
 ```bash
 git clone https://github.com/JackieSung4ev/DriveGuard.git
@@ -84,7 +91,7 @@ sudo dg install-guard
 
 ## Web UI Development
 
-The CLI remains the stable production entrypoint. The next Web UI is split into a Vue frontend and a Go API service:
+The CLI remains the stable production entrypoint. The Web UI is split into a Vue frontend and a Go API service:
 
 ```bash
 cd server
@@ -99,7 +106,7 @@ The Vite dev server proxies `/api` to `http://127.0.0.1:8080`. See [Web UI plan]
 
 ## Web UI Deployment Script
 
-The `feature/web-ui` branch includes a server-side helper for the Web UI product:
+The main branch includes a server-side helper for the Web UI product:
 
 ```bash
 sudo bash driveguard-web.sh --lang zh menu

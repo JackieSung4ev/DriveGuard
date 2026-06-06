@@ -581,6 +581,10 @@ a {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.logs-grid {
+  align-items: start;
+}
+
 .metric-panel,
 .provider-card,
 .section-block {
@@ -640,6 +644,15 @@ a {
 .section-block {
   margin-bottom: 16px;
   padding: 18px;
+}
+
+.logs-sidebar-panel,
+.logs-panel {
+  margin-bottom: 0;
+}
+
+.logs-panel {
+  min-width: 0;
 }
 
 .section-header {
@@ -1059,6 +1072,14 @@ tbody tr:last-child td {
 
 .log-list li {
   align-items: flex-start;
+}
+
+.log-list-scroll {
+  max-height: min(680px, calc(100dvh - 220px));
+  min-height: 220px;
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .log-list time {

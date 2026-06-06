@@ -1358,8 +1358,8 @@ onUnmounted(() => {
       </section>
 
       <section v-if="activePage === 'logs'" class="page-stack">
-        <section class="content-grid">
-          <article class="section-block">
+        <section class="content-grid logs-grid">
+          <article class="section-block logs-sidebar-panel">
             <div class="section-header">
               <div>
                 <p class="eyebrow">Jobs</p>
@@ -1378,14 +1378,14 @@ onUnmounted(() => {
             </ul>
           </article>
 
-          <article class="section-block">
+          <article class="section-block logs-panel">
             <div class="section-header">
               <div>
                 <p class="eyebrow">Logs</p>
                 <h2>{{ t('runLogs') }}</h2>
               </div>
             </div>
-            <ul class="log-list">
+            <ul class="log-list log-list-scroll">
               <li v-for="line in logs" :key="line.id" :class="`log-${line.level}`">
                 <time>{{ line.time }}</time>
                 <span>{{ line.message }}</span>
