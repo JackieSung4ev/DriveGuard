@@ -88,10 +88,21 @@ const verificationUrl = ref('')
 const totpSetup = ref<TotpSetupResponse | null>(null)
 const restoreFile = ref<File | null>(null)
 const accountMenuRef = ref<HTMLDetailsElement | null>(null)
+const notificationMenuRef = ref<HTMLElement | null>(null)
 const languageSelectRef = ref<HTMLSelectElement | null>(null)
+const notificationsOpen = ref(false)
 let noticeTimer: number | undefined
 let themeMediaQuery: MediaQueryList | undefined
 let removeThemeListener: (() => void) | undefined
+
+type NotificationTone = 'error' | 'warning'
+
+interface NotificationItem {
+  id: string
+  title: string
+  detail: string
+  tone: NotificationTone
+}
 
 function t(key: I18nKey, values?: Record<string, string | number>) {
   return formatMessage(messages[locale.value][key], values)
@@ -330,6 +341,48 @@ const healthCards = computed(() => [
   }
 ])
 
+const notificationItems = computed<NotificationItem[]>(() => {
+  const items: NotificationItem[] = []
+
+  status.value?.checks
+    .filter((check) => check.state !== 'ok')
+    .forEach((check) => {
+      items.push({
+        id: `check-${check.id}`,
+        title: check.label,
+        detail: check.value || t('statusAttention'),
+        tone: check.state === 'error' ? 'error' : 'warning'
+      })
+    })
+
+  jobs.value
+    .filter((job) => job.state === 'failed')
+    .slice(0, 3)
+    .forEach((job) => {
+      items.push({
+        id: `job-${job.id}`,
+        title: job.type || t('runNow'),
+        detail: job.output || (job.startedAt ? formatDate(job.startedAt) : t('failed')),
+        tone: 'error'
+      })
+    })
+
+  logs.value
+    .filter((line) => line.level === 'error' || line.level === 'warning')
+    .slice(0, 4)
+    .forEach((line) => {
+      items.push({
+        id: `log-${line.id}`,
+        title: line.message,
+        detail: line.time || logLevelLabel(line.level),
+        tone: line.level === 'error' ? 'error' : 'warning'
+      })
+    })
+
+  return items.slice(0, 6)
+})
+const hasNotifications = computed(() => notificationItems.value.length > 0)
+
 watch(locale, (value, oldValue) => {
   window.localStorage.setItem('driveguard-locale', value)
   if (planForm.name === messages[oldValue].defaultPlanName) {
@@ -364,6 +417,7 @@ watch(notice, (value) => {
 watch(activePage, () => {
   notice.value = ''
   error.value = ''
+  notificationsOpen.value = false
   mobileNavOpen.value = false
   if (editingPlanId.value && activePage.value !== 'plans') {
     cancelEditPlan()
@@ -403,7 +457,23 @@ function closeFloatingControls() {
   if (accountMenuRef.value) {
     accountMenuRef.value.open = false
   }
+  notificationsOpen.value = false
   languageSelectRef.value?.blur()
+}
+
+function toggleNotifications() {
+  notificationsOpen.value = !notificationsOpen.value
+  if (!notificationsOpen.value) return
+
+  if (accountMenuRef.value) {
+    accountMenuRef.value.open = false
+  }
+  languageSelectRef.value?.blur()
+}
+
+function viewNotificationLogs() {
+  notificationsOpen.value = false
+  goPage('logs')
 }
 
 function handleDocumentPointerDown(event: PointerEvent) {
@@ -412,6 +482,9 @@ function handleDocumentPointerDown(event: PointerEvent) {
 
   if (accountMenuRef.value && !accountMenuRef.value.contains(target)) {
     accountMenuRef.value.open = false
+  }
+  if (notificationMenuRef.value && !notificationMenuRef.value.contains(target)) {
+    notificationsOpen.value = false
   }
   if (languageSelectRef.value && !languageSelectRef.value.contains(target)) {
     languageSelectRef.value.blur()
@@ -1076,10 +1149,54 @@ onUnmounted(() => {
         </div>
 
         <div class="top-actions">
-          <button class="icon-button notification-button" type="button" :aria-label="t('notifications')" :title="t('notifications')">
-            <Bell :size="18" aria-hidden="true" />
-            <span class="notification-dot" aria-hidden="true"></span>
-          </button>
+          <div ref="notificationMenuRef" class="notification-menu">
+            <button
+              :class="['icon-button', 'notification-button', { active: notificationsOpen }]"
+              type="button"
+              :aria-label="t('notifications')"
+              :aria-expanded="notificationsOpen"
+              aria-controls="notification-popover"
+              aria-haspopup="dialog"
+              :title="t('notifications')"
+              @click="toggleNotifications"
+            >
+              <Bell :size="18" aria-hidden="true" />
+              <span v-if="hasNotifications" class="notification-dot" aria-hidden="true"></span>
+            </button>
+
+            <div
+              v-if="notificationsOpen"
+              id="notification-popover"
+              class="notification-popover"
+              role="dialog"
+              :aria-label="t('notificationPanel')"
+            >
+              <div class="notification-popover-header">
+                <strong>{{ t('notifications') }}</strong>
+                <button class="ghost-button notification-log-link" type="button" @click="viewNotificationLogs">
+                  {{ t('notificationViewLogs') }}
+                </button>
+              </div>
+
+              <ul v-if="notificationItems.length" class="notification-list">
+                <li
+                  v-for="item in notificationItems"
+                  :key="item.id"
+                  :class="['notification-item', `notification-${item.tone}`]"
+                >
+                  <span class="notification-status-dot" aria-hidden="true"></span>
+                  <span>
+                    <strong>{{ item.title }}</strong>
+                    <small>{{ item.detail }}</small>
+                  </span>
+                </li>
+              </ul>
+              <div v-else class="notification-empty">
+                <strong>{{ t('notificationEmpty') }}</strong>
+                <small>{{ t('notificationEmptyHint') }}</small>
+              </div>
+            </div>
+          </div>
           <label class="language-control">
             <Languages :size="18" aria-hidden="true" />
             <select ref="languageSelectRef" v-model="locale" :aria-label="t('language')">

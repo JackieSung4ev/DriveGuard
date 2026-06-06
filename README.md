@@ -14,6 +14,10 @@ English is the default project language. DriveGuard is a Web UI-first backup sys
 ![Encryption](https://img.shields.io/badge/encryption-AES--256--CBC-blue)
 ![Schedule](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
+<p align="center">
+  <img src="web/dist/screencapture.png" alt="DriveGuard Web UI dashboard screenshot" width="960">
+</p>
+
 ## Product Paths
 
 | Path | Best for | Entry point | Guide |

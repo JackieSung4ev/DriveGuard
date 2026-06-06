@@ -14,6 +14,10 @@
 ![Encryption](https://img.shields.io/badge/encryption-AES--256--CBC-blue)
 ![Schedule](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
+<p align="center">
+  <img src="../../web/dist/screencapture.png" alt="DriveGuard Web UI 仪表盘截图" width="960">
+</p>
+
 ## 产品入口
 
 | 入口 | 适合场景 | 入口脚本 | 文档 |
