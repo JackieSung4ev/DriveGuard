@@ -162,6 +162,7 @@ export async function getStatus(): Promise<DriveGuardStatus> {
   return {
     ...status,
     targets: status.targets ?? [],
+    localBackup: status.localBackup ?? mockStatus.localBackup,
     providers: status.providers ?? mockStatus.providers,
     plans: status.plans ?? mockStatus.plans,
     checks: status.checks ?? [],
@@ -313,6 +314,13 @@ const mockStatus: DriveGuardStatus = {
     mysqlDatabases: 4,
     postgresDatabases: 1,
     lastRun: '2026-06-06T03:00:00+08:00'
+  },
+  localBackup: {
+    path: '/var/backups/driveguard',
+    exists: true,
+    fileCount: 8,
+    latestFile: '/var/backups/driveguard/site/main-site/Web_main-site_20260606_030000.tar.gz.enc',
+    latestTime: '2026-06-06T03:08:24+08:00'
   },
   targets: [
     {

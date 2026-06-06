@@ -88,6 +88,13 @@ export interface DriveGuardStatus {
     postgresDatabases: number
     lastRun: string
   }
+  localBackup: {
+    path: string
+    exists: boolean
+    fileCount: number
+    latestFile: string
+    latestTime: string
+  }
   targets: BackupTarget[]
   providers: CloudProvider[]
   plans: BackupPlan[]

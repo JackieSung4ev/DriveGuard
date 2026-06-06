@@ -1,8 +1,11 @@
 package driveguard
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JackieSung4ev/gdrive/server/internal/model"
 )
@@ -83,6 +86,7 @@ KEEP_COPIES=3
 		"KEEP_COPIES":        "7",
 		"CRON_EXPR":          "30 2 * * *",
 		"ENABLE_CRON_GUARD":  "1",
+		"WEB_PLAN_NAME":      "Daily site's backup",
 	}, planConfigKeyOrder)
 
 	for _, expected := range []string{
@@ -92,6 +96,7 @@ KEEP_COPIES=3
 		"KEEP_COPIES='7'",
 		"CRON_EXPR='30 2 * * *'",
 		"ENABLE_CRON_GUARD='1'",
+		"WEB_PLAN_NAME='Daily site'\"'\"'s backup'",
 	} {
 		if !strings.Contains(updated, expected) {
 			t.Fatalf("updated config does not contain %q:\n%s", expected, updated)
@@ -105,6 +110,11 @@ func TestPlansFromConfig(t *testing.T) {
 		RemotePath:      "backup",
 		RetentionCopies: 3,
 		Cron:            "0 3 * * *",
+	}, map[string]string{
+		"WEB_PLAN_NAME":     "Website backup",
+		"WEB_PLAN_KIND":     "website",
+		"WEB_PLAN_TARGET":   "site-main",
+		"WEB_PLAN_PROVIDER": "google-drive",
 	})
 
 	if len(plans) != 1 {
@@ -113,7 +123,38 @@ func TestPlansFromConfig(t *testing.T) {
 	if !plans[0].Enabled || plans[0].State != model.PlanReady {
 		t.Fatalf("plan not enabled: %+v", plans[0])
 	}
+	if plans[0].Name != "Website backup" || plans[0].Kind != model.BackupKindWebsite || plans[0].Target != "site-main" {
+		t.Fatalf("plan metadata = %+v", plans[0])
+	}
 	if plans[0].ProviderID != "google-drive" || plans[0].RemotePath != "backup" || plans[0].RetentionCopies != 3 {
 		t.Fatalf("plan values = %+v", plans[0])
+	}
+}
+
+func TestInspectLocalBackup(t *testing.T) {
+	dir := t.TempDir()
+	oldFile := filepath.Join(dir, "old.enc")
+	newFile := filepath.Join(dir, "new.enc")
+	if err := os.WriteFile(oldFile, []byte("old"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newFile, []byte("new"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	oldTime := time.Date(2026, 6, 5, 3, 0, 0, 0, time.UTC)
+	newTime := time.Date(2026, 6, 6, 3, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(oldFile, oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(newFile, newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	info := inspectLocalBackup(dir)
+	if !info.Exists || info.FileCount != 2 {
+		t.Fatalf("local backup info = %+v", info)
+	}
+	if info.LatestFile != newFile || info.LatestTime == "" {
+		t.Fatalf("latest backup info = %+v", info)
 	}
 }

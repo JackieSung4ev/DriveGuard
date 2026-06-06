@@ -516,6 +516,11 @@ a {
   background: transparent;
 }
 
+.table-action {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
 .icon-button:hover,
 .account-summary:hover,
 .secondary-button:hover,
@@ -645,6 +650,12 @@ a {
   margin-bottom: 14px;
 }
 
+.section-note {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
 .provider-card {
   padding: 18px;
 }
@@ -697,6 +708,11 @@ a {
 .compact-list dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.backup-path-list dd {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.875rem;
 }
 
 .plan-form {

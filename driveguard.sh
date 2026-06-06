@@ -28,6 +28,10 @@ RCLONE_REMOTE_PATH="${RCLONE_REMOTE_PATH:-driveguard}"
 RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
 KEEP_COPIES="${KEEP_COPIES:-7}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/${APP_NAME}}"
+BACKUP_SCOPE_KIND="${BACKUP_SCOPE_KIND:-full}"
+BACKUP_SCOPE_NAME="${BACKUP_SCOPE_NAME:-}"
+BACKUP_SCOPE_LOCATION="${BACKUP_SCOPE_LOCATION:-}"
+BACKUP_SCOPE_EXCLUDES="${BACKUP_SCOPE_EXCLUDES:-}"
 AUTO_DISCOVER_SITES="${AUTO_DISCOVER_SITES:-1}"
 AUTO_DISCOVER_DATABASES="${AUTO_DISCOVER_DATABASES:-1}"
 SITE_ROOTS="${SITE_ROOTS:-/www/wwwroot /var/www /srv/www /usr/share/nginx/html}"
@@ -121,6 +125,10 @@ load_config() {
   RCLONE_CHUNK_SIZE="${RCLONE_CHUNK_SIZE:-64M}"
   KEEP_COPIES="${KEEP_COPIES:-7}"
   BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/${APP_NAME}}"
+  BACKUP_SCOPE_KIND="${BACKUP_SCOPE_KIND:-full}"
+  BACKUP_SCOPE_NAME="${BACKUP_SCOPE_NAME:-}"
+  BACKUP_SCOPE_LOCATION="${BACKUP_SCOPE_LOCATION:-}"
+  BACKUP_SCOPE_EXCLUDES="${BACKUP_SCOPE_EXCLUDES:-}"
   AUTO_DISCOVER_SITES="${AUTO_DISCOVER_SITES:-1}"
   AUTO_DISCOVER_DATABASES="${AUTO_DISCOVER_DATABASES:-1}"
   SITE_ROOTS="${SITE_ROOTS:-/www/wwwroot /var/www /srv/www /usr/share/nginx/html}"
@@ -159,7 +167,8 @@ save_config() {
       STATE_DIR LOG_DIR LOG_FILE RCLONE_LOG_FILE LOCK_FILE \
       UPDATE_REPO_DIR \
       RCLONE_REMOTE RCLONE_REMOTE_PATH RCLONE_CHUNK_SIZE KEEP_COPIES \
-      BACKUP_ROOT AUTO_DISCOVER_SITES AUTO_DISCOVER_DATABASES SITE_ROOTS \
+      BACKUP_ROOT BACKUP_SCOPE_KIND BACKUP_SCOPE_NAME BACKUP_SCOPE_LOCATION BACKUP_SCOPE_EXCLUDES \
+      AUTO_DISCOVER_SITES AUTO_DISCOVER_DATABASES SITE_ROOTS \
       MYSQL_HOST MYSQL_PORT MYSQL_SOCKET MYSQLDUMP_BIN MYSQL_BIN \
       POSTGRES_ENABLED POSTGRES_HOST POSTGRES_PORT POSTGRES_USER POSTGRES_DEFAULT_DB PGDUMP_BIN PSQL_BIN \
       CRON_EXPR ENABLE_CRON_GUARD
@@ -1048,6 +1057,33 @@ backup_all() {
   local -A seen_databases=()
   local -A seen_postgres_databases=()
 
+  case "${BACKUP_SCOPE_KIND,,}" in
+    full|"")
+      ;;
+    website|site)
+      [[ -n "$BACKUP_SCOPE_NAME" && -n "$BACKUP_SCOPE_LOCATION" ]] || die "BACKUP_SCOPE_NAME and BACKUP_SCOPE_LOCATION are required for website scope"
+      backup_site "$BACKUP_SCOPE_NAME" "$BACKUP_SCOPE_LOCATION" "${BACKUP_SCOPE_EXCLUDES:-}"
+      log "Backup finished: websites 1, MySQL/MariaDB databases 0, PostgreSQL databases 0, retention ${KEEP_COPIES} copies"
+      return 0
+      ;;
+    mysql|mariadb|database)
+      [[ -n "$BACKUP_SCOPE_NAME" ]] || die "BACKUP_SCOPE_NAME is required for MySQL/MariaDB scope"
+      backup_database "$BACKUP_SCOPE_NAME"
+      log "Backup finished: websites 0, MySQL/MariaDB databases 1, PostgreSQL databases 0, retention ${KEEP_COPIES} copies"
+      return 0
+      ;;
+    postgresql|postgres)
+      [[ -n "$BACKUP_SCOPE_NAME" ]] || die "BACKUP_SCOPE_NAME is required for PostgreSQL scope"
+      postgres_backup_enabled || die "PostgreSQL backup is disabled"
+      backup_postgres_database "$BACKUP_SCOPE_NAME"
+      log "Backup finished: websites 0, MySQL/MariaDB databases 0, PostgreSQL databases 1, retention ${KEEP_COPIES} copies"
+      return 0
+      ;;
+    *)
+      die "Unsupported BACKUP_SCOPE_KIND: $BACKUP_SCOPE_KIND"
+      ;;
+  esac
+
   if [[ -s "$SITES_FILE" ]]; then
     while IFS='|' read -r name path excludes; do
       [[ -z "${name//[[:space:]]/}" || "${name:0:1}" == "#" ]] && continue
@@ -1307,6 +1343,11 @@ print_status() {
   printf '  Remote directory: %s\n' "${RCLONE_REMOTE_PATH:-/}"
   printf '  Local directory: %s\n' "$BACKUP_ROOT"
   printf '  Retention copies: %s\n' "$KEEP_COPIES"
+  if [[ "${BACKUP_SCOPE_KIND:-full}" != "full" ]]; then
+    printf '  Backup scope: %s %s\n' "$BACKUP_SCOPE_KIND" "$BACKUP_SCOPE_NAME"
+  else
+    printf '  Backup scope: full\n'
+  fi
   printf '  Auto-discover websites: %s\n' "$AUTO_DISCOVER_SITES"
   printf '  Website roots: %s\n' "$SITE_ROOTS"
   printf '  Auto-discover databases: %s\n' "$AUTO_DISCOVER_DATABASES"

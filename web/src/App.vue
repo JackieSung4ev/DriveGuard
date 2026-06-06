@@ -23,6 +23,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Pencil,
   Play,
   Plus,
   RefreshCcw,
@@ -54,7 +55,7 @@ import {
 } from './services/api'
 import { detectLocale, formatMessage, messages, type I18nKey, type Locale } from './i18n'
 import { createQrSvg } from './qr'
-import type { AuthState, BackupKind, BackupTarget, CloudProvider, DriveGuardStatus, TotpSetupResponse } from './types'
+import type { AuthState, BackupKind, BackupPlan, BackupTarget, CloudProvider, DriveGuardStatus, TotpSetupResponse } from './types'
 
 type Page = 'home' | 'cloud' | 'plans' | 'restore' | 'logs' | 'account'
 type CycleType = 'daily' | 'weekly' | 'monthly' | 'interval' | 'custom'
@@ -122,6 +123,7 @@ const planForm = reactive({
   encryptionPassword: '',
   encryptionPasswordConfirm: ''
 })
+const editingPlanId = ref('')
 
 const scheduleForm = reactive({
   type: 'daily' as CycleType,
@@ -137,6 +139,7 @@ const plans = computed(() => status.value?.plans ?? [])
 const targets = computed(() => status.value?.targets ?? [])
 const logs = computed(() => status.value?.logs ?? [])
 const jobs = computed(() => status.value?.jobs ?? [])
+const localBackup = computed(() => status.value?.localBackup)
 
 const totalTargets = computed(() => {
   if (!status.value) return 0
@@ -193,7 +196,10 @@ watch(locale, (value, oldValue) => {
 watch(
   () => planForm.kind,
   () => {
-    planForm.target = targetOptions.value[0]?.value || 'all'
+    const options = targetOptions.value
+    if (!options.some((target) => target.value === planForm.target)) {
+      planForm.target = options[0]?.value || 'all'
+    }
   }
 )
 
@@ -454,12 +460,41 @@ async function savePlan() {
     })
 
     await refreshStatus()
+    editingPlanId.value = ''
     notice.value = t('planSaved')
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('savePlanFailed')
   } finally {
     savingPlan.value = false
   }
+}
+
+function editPlan(plan: BackupPlan) {
+  editingPlanId.value = plan.id
+  planForm.name = plan.name
+  planForm.kind = plan.kind
+  planForm.target = plan.target || 'all'
+  planForm.providerId = plan.providerId
+  planForm.remotePath = plan.remotePath
+  planForm.retentionCopies = plan.retentionCopies
+  planForm.encrypted = plan.encrypted
+  planForm.encryptionPassword = ''
+  planForm.encryptionPasswordConfirm = ''
+  applyCronToSchedule(plan.cron)
+}
+
+function cancelEditPlan() {
+  editingPlanId.value = ''
+  planForm.name = t('defaultPlanName')
+  planForm.kind = 'full'
+  planForm.target = 'all'
+  planForm.providerId = providers.value[0]?.id || 'google-drive'
+  planForm.remotePath = 'driveguard'
+  planForm.retentionCopies = 7
+  planForm.encrypted = true
+  planForm.encryptionPassword = ''
+  planForm.encryptionPasswordConfirm = ''
+  applyCronToSchedule('0 3 * * *')
 }
 
 async function submitPasswordChange() {
@@ -590,6 +625,42 @@ function buildCron() {
   }
 }
 
+function applyCronToSchedule(cron: string) {
+  const parts = cron.trim().split(/\s+/)
+  if (parts.length !== 5) {
+    scheduleForm.type = 'custom'
+    scheduleForm.customCron = cron || '0 3 * * *'
+    return
+  }
+
+  const [minute, hour, day, month, weekday] = parts
+  if (minute === '0' && hour.startsWith('*/') && day === '*' && month === '*' && weekday === '*') {
+    scheduleForm.type = 'interval'
+    scheduleForm.intervalHours = Number(hour.replace('*/', '')) || 12
+    return
+  }
+  if (day === '*' && month === '*' && weekday === '*') {
+    scheduleForm.type = 'daily'
+    scheduleForm.time = timeLabel(hour, minute)
+    return
+  }
+  if (day === '*' && month === '*') {
+    scheduleForm.type = 'weekly'
+    scheduleForm.weekday = weekday
+    scheduleForm.time = timeLabel(hour, minute)
+    return
+  }
+  if (month === '*' && weekday === '*') {
+    scheduleForm.type = 'monthly'
+    scheduleForm.monthDay = Number(day) || 1
+    scheduleForm.time = timeLabel(hour, minute)
+    return
+  }
+
+  scheduleForm.type = 'custom'
+  scheduleForm.customCron = cron
+}
+
 function readableSchedule(cron: string) {
   const parts = cron.trim().split(/\s+/)
   if (parts.length !== 5) return cron
@@ -631,6 +702,11 @@ function planKindLabel(kind: BackupKind) {
   if (kind === 'website') return t('website')
   if (kind === 'database') return t('database')
   return t('full')
+}
+
+function planTargetLabel(targetId: string) {
+  if (!targetId || targetId === 'all') return t('allTargets')
+  return targets.value.find((target) => target.id === targetId)?.name ?? targetId
 }
 
 function planStateLabel(state: string) {
@@ -933,10 +1009,43 @@ onUnmounted(() => {
           <article class="section-block">
             <div class="section-header">
               <div>
+                <p class="eyebrow">Local</p>
+                <h2>{{ t('localBackups') }}</h2>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="!localBackup?.path"
+                @click="copyText(localBackup?.path || '')"
+              >
+                <Copy :size="16" aria-hidden="true" />
+                {{ t('copyPath') }}
+              </button>
+            </div>
+            <dl class="compact-list backup-path-list">
+              <div>
+                <dt>{{ t('localBackupPath') }}</dt>
+                <dd>{{ localBackup?.path || '-' }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('backupFiles') }}</dt>
+                <dd>{{ localBackup?.exists ? localBackup.fileCount : 0 }}</dd>
+              </div>
+              <div>
+                <dt>{{ t('latestBackup') }}</dt>
+                <dd>{{ localBackup?.latestFile || t('noLocalBackup') }}</dd>
+              </div>
+            </dl>
+          </article>
+
+          <article class="section-block">
+            <div class="section-header">
+              <div>
                 <p class="eyebrow">Targets</p>
                 <h2>{{ t('backupSources') }}</h2>
               </div>
             </div>
+            <p class="section-note">{{ t('configuredTargetsOnly') }}</p>
             <ul class="target-list">
               <li v-for="target in targets" :key="target.id">
                 <component :is="targetIcon(target)" :size="18" aria-hidden="true" />
@@ -1005,8 +1114,12 @@ onUnmounted(() => {
           <div class="section-header">
             <div>
               <p class="eyebrow">Create</p>
-              <h2>{{ t('newPlan') }}</h2>
+              <h2>{{ editingPlanId ? t('editingPlan') : t('newPlan') }}</h2>
             </div>
+            <button v-if="editingPlanId" class="secondary-button" type="button" @click="cancelEditPlan">
+              <X :size="16" aria-hidden="true" />
+              {{ t('cancelEdit') }}
+            </button>
           </div>
 
           <form class="plan-form" @submit.prevent="savePlan">
@@ -1031,6 +1144,7 @@ onUnmounted(() => {
                   {{ target.label }}
                 </option>
               </select>
+              <small v-if="planForm.kind !== 'full'">{{ t('singleTargetScheduleNote') }}</small>
             </label>
 
             <label>
@@ -1154,6 +1268,7 @@ onUnmounted(() => {
                   <th>{{ t('schedule') }}</th>
                   <th>{{ t('retention') }}</th>
                   <th>{{ t('state') }}</th>
+                  <th>{{ t('edit') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1162,11 +1277,20 @@ onUnmounted(() => {
                     <strong>{{ plan.name }}</strong>
                     <small>{{ plan.remotePath }}</small>
                   </td>
-                  <td>{{ planKindLabel(plan.kind) }}</td>
+                  <td>
+                    {{ planKindLabel(plan.kind) }}
+                    <small>{{ planTargetLabel(plan.target) }}</small>
+                  </td>
                   <td>{{ providerName(plan.providerId) }}</td>
                   <td>{{ readableSchedule(plan.cron) }}</td>
                   <td>{{ t('keepCopies', { count: plan.retentionCopies }) }}</td>
                   <td><span :class="['badge', `badge-${plan.state}`]">{{ planStateLabel(plan.state) }}</span></td>
+                  <td>
+                    <button class="ghost-button table-action" type="button" @click="editPlan(plan)">
+                      <Pencil :size="16" aria-hidden="true" />
+                      {{ t('edit') }}
+                    </button>
+                  </td>
                 </tr>
               </tbody>
             </table>

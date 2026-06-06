@@ -45,15 +45,16 @@ const (
 )
 
 type DriveGuardStatus struct {
-	Service   ServiceInfo     `json:"service"`
-	Config    RuntimeConfig   `json:"config"`
-	Metrics   Metrics         `json:"metrics"`
-	Targets   []BackupTarget  `json:"targets"`
-	Providers []CloudProvider `json:"providers"`
-	Plans     []BackupPlan    `json:"plans"`
-	Checks    []StatusCheck   `json:"checks"`
-	Jobs      []JobSummary    `json:"jobs"`
-	Logs      []LogLine       `json:"logs"`
+	Service     ServiceInfo     `json:"service"`
+	Config      RuntimeConfig   `json:"config"`
+	Metrics     Metrics         `json:"metrics"`
+	LocalBackup LocalBackupInfo `json:"localBackup"`
+	Targets     []BackupTarget  `json:"targets"`
+	Providers   []CloudProvider `json:"providers"`
+	Plans       []BackupPlan    `json:"plans"`
+	Checks      []StatusCheck   `json:"checks"`
+	Jobs        []JobSummary    `json:"jobs"`
+	Logs        []LogLine       `json:"logs"`
 }
 
 type ServiceInfo struct {
@@ -77,6 +78,14 @@ type Metrics struct {
 	MySQLDatabases    int    `json:"mysqlDatabases"`
 	PostgresDatabases int    `json:"postgresDatabases"`
 	LastRun           string `json:"lastRun"`
+}
+
+type LocalBackupInfo struct {
+	Path       string `json:"path"`
+	Exists     bool   `json:"exists"`
+	FileCount  int    `json:"fileCount"`
+	LatestFile string `json:"latestFile"`
+	LatestTime string `json:"latestTime"`
 }
 
 type BackupTarget struct {

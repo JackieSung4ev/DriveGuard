@@ -97,8 +97,9 @@ func (c *Client) Dashboard(ctx context.Context) model.DriveGuardStatus {
 	applyStatusValues(&dashboard, values)
 	dashboard.Targets = readTargets(values)
 	dashboard.Metrics = countTargets(dashboard.Metrics, dashboard.Targets)
+	dashboard.LocalBackup = inspectLocalBackup(dashboard.Config.BackupRoot)
 	dashboard.Providers = buildProviders(values)
-	dashboard.Plans = PlansFromConfig(dashboard.Config)
+	dashboard.Plans = PlansFromConfig(dashboard.Config, readShellConfigValues(configFileFromStatus(values)))
 	dashboard.Checks = buildChecks(scriptPath, values, err)
 	dashboard.Logs = c.LogLines(ctx, 20)
 
@@ -130,6 +131,10 @@ func (c *Client) EnablePlan(ctx context.Context, plan model.BackupPlan) (model.B
 	if strings.ContainsAny(plan.RemotePath, "\x00\r\n") {
 		return model.BackupPlan{}, fmt.Errorf("remote directory cannot contain newlines")
 	}
+	scopeUpdates, err := c.backupScopeUpdates(ctx, plan)
+	if err != nil {
+		return model.BackupPlan{}, err
+	}
 
 	configPath := c.ConfigFile(ctx)
 	raw, err := os.ReadFile(configPath)
@@ -143,6 +148,13 @@ func (c *Client) EnablePlan(ctx context.Context, plan model.BackupPlan) (model.B
 		"KEEP_COPIES":        strconv.Itoa(plan.RetentionCopies),
 		"CRON_EXPR":          plan.Cron,
 		"ENABLE_CRON_GUARD":  "1",
+		"WEB_PLAN_NAME":      plan.Name,
+		"WEB_PLAN_KIND":      string(plan.Kind),
+		"WEB_PLAN_TARGET":    plan.Target,
+		"WEB_PLAN_PROVIDER":  providerID,
+	}
+	for key, value := range scopeUpdates {
+		updates[key] = value
 	}
 	for key, value := range updates {
 		if strings.ContainsAny(value, "\x00\r\n") {
@@ -215,7 +227,49 @@ func (c *Client) CronGuardStatus(ctx context.Context) string {
 	return "unknown"
 }
 
-func PlansFromConfig(config model.RuntimeConfig) []model.BackupPlan {
+func (c *Client) backupScopeUpdates(ctx context.Context, plan model.BackupPlan) (map[string]string, error) {
+	updates := map[string]string{
+		"BACKUP_SCOPE_KIND":     "full",
+		"BACKUP_SCOPE_NAME":     "",
+		"BACKUP_SCOPE_LOCATION": "",
+		"BACKUP_SCOPE_EXCLUDES": "",
+	}
+	if plan.Kind == model.BackupKindFull || strings.TrimSpace(plan.Target) == "" || plan.Target == "all" {
+		return updates, nil
+	}
+
+	status := c.Dashboard(ctx)
+	var selected model.BackupTarget
+	found := false
+	for _, target := range status.Targets {
+		if target.ID == plan.Target {
+			selected = target
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("selected backup target was not found in the configured target list")
+	}
+
+	switch {
+	case plan.Kind == model.BackupKindWebsite && selected.Type == model.TargetSite:
+		updates["BACKUP_SCOPE_KIND"] = "website"
+		updates["BACKUP_SCOPE_NAME"] = selected.Name
+		updates["BACKUP_SCOPE_LOCATION"] = selected.Location
+	case plan.Kind == model.BackupKindDatabase && selected.Type == model.TargetMySQL:
+		updates["BACKUP_SCOPE_KIND"] = "mysql"
+		updates["BACKUP_SCOPE_NAME"] = selected.Name
+	case plan.Kind == model.BackupKindDatabase && selected.Type == model.TargetPostgreSQL:
+		updates["BACKUP_SCOPE_KIND"] = "postgresql"
+		updates["BACKUP_SCOPE_NAME"] = selected.Name
+	default:
+		return nil, fmt.Errorf("selected target does not match the backup content type")
+	}
+	return updates, nil
+}
+
+func PlansFromConfig(config model.RuntimeConfig, metadata map[string]string) []model.BackupPlan {
 	cron := strings.TrimSpace(config.Cron)
 	if cron == "" || cron == "-" {
 		return nil
@@ -233,14 +287,18 @@ func PlansFromConfig(config model.RuntimeConfig) []model.BackupPlan {
 	if retention < 1 {
 		retention = 7
 	}
+	name := valueOr(metadata["WEB_PLAN_NAME"], "DriveGuard scheduled backup")
+	kind := backupKindOrDefault(metadata["WEB_PLAN_KIND"])
+	target := valueOr(metadata["WEB_PLAN_TARGET"], "all")
+	providerID := valueOr(metadata["WEB_PLAN_PROVIDER"], providerIDForRemote(remote))
 
 	return []model.BackupPlan{
 		{
 			ID:              "plan-cli-active",
-			Name:            "DriveGuard scheduled backup",
-			Kind:            model.BackupKindFull,
-			Target:          "all configured websites and databases",
-			ProviderID:      providerIDForRemote(remote),
+			Name:            name,
+			Kind:            kind,
+			Target:          target,
+			ProviderID:      providerID,
 			RemotePath:      remotePath,
 			Cron:            cron,
 			RetentionCopies: retention,
@@ -251,6 +309,44 @@ func PlansFromConfig(config model.RuntimeConfig) []model.BackupPlan {
 			LastRun:         "",
 		},
 	}
+}
+
+func inspectLocalBackup(root string) model.LocalBackupInfo {
+	root = strings.TrimSpace(root)
+	info := model.LocalBackupInfo{Path: root}
+	if root == "" || root == "-" {
+		return info
+	}
+
+	stat, err := os.Stat(root)
+	if err != nil || !stat.IsDir() {
+		return info
+	}
+	info.Exists = true
+
+	var latestTime time.Time
+	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(strings.ToLower(entry.Name()), ".enc") {
+			return nil
+		}
+
+		fileInfo, err := entry.Info()
+		if err != nil {
+			return nil
+		}
+		info.FileCount++
+		if fileInfo.ModTime().After(latestTime) {
+			latestTime = fileInfo.ModTime()
+			info.LatestFile = path
+			info.LatestTime = fileInfo.ModTime().Format(time.RFC3339)
+		}
+		return nil
+	})
+
+	return info
 }
 
 func DefaultPlans() []model.BackupPlan {
@@ -805,6 +901,48 @@ var planConfigKeyOrder = []string{
 	"KEEP_COPIES",
 	"CRON_EXPR",
 	"ENABLE_CRON_GUARD",
+	"BACKUP_SCOPE_KIND",
+	"BACKUP_SCOPE_NAME",
+	"BACKUP_SCOPE_LOCATION",
+	"BACKUP_SCOPE_EXCLUDES",
+	"WEB_PLAN_NAME",
+	"WEB_PLAN_KIND",
+	"WEB_PLAN_TARGET",
+	"WEB_PLAN_PROVIDER",
+}
+
+func configFileFromStatus(values map[string]string) string {
+	if configFile := strings.TrimSpace(values["config file"]); configFile != "" {
+		return configFile
+	}
+	if configured := strings.TrimSpace(os.Getenv("CONFIG_FILE")); configured != "" {
+		return configured
+	}
+	if runtime.GOOS == "windows" {
+		return "driveguard-config.conf"
+	}
+	return "/etc/driveguard/config.conf"
+}
+
+func readShellConfigValues(path string) map[string]string {
+	values := map[string]string{}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return values
+	}
+
+	for _, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
+		key, ok := shellAssignmentKey(line)
+		if !ok {
+			continue
+		}
+		index := strings.Index(strings.TrimSpace(line), "=")
+		if index < 0 {
+			continue
+		}
+		values[key] = shellUnquote(strings.TrimSpace(line)[index+1:])
+	}
+	return values
 }
 
 func updateShellConfig(raw string, updates map[string]string, order []string) string {
@@ -875,6 +1013,17 @@ func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
+func shellUnquote(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) >= 2 && strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
+		return strings.ReplaceAll(value[1:len(value)-1], "'\"'\"'", "'")
+	}
+	if len(value) >= 2 && strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
+		return strings.ReplaceAll(value[1:len(value)-1], `\"`, `"`)
+	}
+	return value
+}
+
 func validCron(expr string) bool {
 	if strings.ContainsAny(expr, "\x00\r\n") {
 		return false
@@ -924,6 +1073,17 @@ func normalizedProviderID(providerID string) string {
 		return "onedrive"
 	default:
 		return "google-drive"
+	}
+}
+
+func backupKindOrDefault(value string) model.BackupKind {
+	switch model.BackupKind(strings.TrimSpace(value)) {
+	case model.BackupKindWebsite:
+		return model.BackupKindWebsite
+	case model.BackupKindDatabase:
+		return model.BackupKindDatabase
+	default:
+		return model.BackupKindFull
 	}
 }
 
