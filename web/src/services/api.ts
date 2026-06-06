@@ -4,6 +4,7 @@ import type {
   CreateBackupPlanRequest,
   CreateBackupPlanResponse,
   AuthState,
+  CloudAuthUrlResponse,
   DriveGuardStatus,
   LoginResponse,
   StartBackupResponse,
@@ -113,6 +114,16 @@ function mockResponse<T>(path: string, init?: RequestInit): T {
 
   if (path === '/cloud-providers') {
     return { providers: mockStatus.providers } as T
+  }
+
+  if (path === '/cloud/google/auth-url') {
+    return {
+      configured: true,
+      authUrl: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=mock&response_type=code',
+      redirectUri: 'https://example.com/api/v1/cloud/google/callback',
+      remoteName: 'gdrive',
+      scope: 'drive.file'
+    } as T
   }
 
   if (path === '/backup-plans' && (!init || init.method === 'GET')) {
@@ -265,6 +276,10 @@ export function startBackup(): Promise<StartBackupResponse> {
 
 export function getCloudProviders(): Promise<{ providers: CloudProvider[] }> {
   return request<{ providers: CloudProvider[] }>('/cloud-providers')
+}
+
+export function getGoogleAuthUrl(): Promise<CloudAuthUrlResponse> {
+  return request<CloudAuthUrlResponse>('/cloud/google/auth-url')
 }
 
 export function getBackupPlans(): Promise<{ plans: BackupPlan[] }> {

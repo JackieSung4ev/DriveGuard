@@ -53,7 +53,13 @@ The backend can initially wrap `driveguard.sh` commands. Core backup logic can m
 
 Initial provider support is intentionally narrow: Google Drive and Microsoft OneDrive through `rclone`.
 
-The authorization UI follows a three-step pattern: copy the provider-specific `dg auth` command, open the generated OAuth link, then paste the redirected verification URL back for confirmation. The Web UI branch keeps `sudo dg auth` as a provider picker and supports direct commands like `sudo dg auth google` and `sudo dg auth onedrive`; advanced `rclone config` remains available as a fallback.
+Google Drive can use direct Web OAuth when the server has `DRIVEGUARD_PUBLIC_URL`, `DRIVEGUARD_GOOGLE_CLIENT_ID`, and `DRIVEGUARD_GOOGLE_CLIENT_SECRET` configured. The Google OAuth client must be a Web application client with this authorized redirect URI:
+
+```text
+${DRIVEGUARD_PUBLIC_URL}/api/v1/cloud/google/callback
+```
+
+The callback exchanges the authorization code on the server and writes the token to the selected rclone remote, defaulting to `gdrive:`. When Google Web OAuth is not configured, the UI falls back to the three-step CLI pattern: copy the provider-specific `dg auth` command, open the generated OAuth link, then paste the redirected verification URL back for confirmation. The Web UI branch keeps `sudo dg auth` as a provider picker and supports direct commands like `sudo dg auth google` and `sudo dg auth onedrive`; advanced `rclone config` remains available as a fallback.
 
 ## API Shape
 
@@ -71,6 +77,8 @@ POST /api/v1/security/archive-password
 POST /api/v1/restore/decrypt
 GET  /api/v1/status
 GET  /api/v1/cloud-providers
+GET  /api/v1/cloud/google/auth-url
+GET  /api/v1/cloud/google/callback
 GET  /api/v1/backup-plans
 POST /api/v1/backup-plans
 GET  /api/v1/logs?lines=80

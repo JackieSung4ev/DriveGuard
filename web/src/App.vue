@@ -44,6 +44,7 @@ import {
   disableTotp,
   enableTotp,
   getAuthState,
+  getGoogleAuthUrl,
   getStatus,
   login,
   logout,
@@ -70,6 +71,7 @@ const loading = ref(true)
 const runningBackup = ref(false)
 const savingPlan = ref(false)
 const decryptingRestore = ref(false)
+const startingCloudAuth = ref<string | null>(null)
 const error = ref('')
 const notice = ref('')
 const authProvider = ref<CloudProvider | null>(null)
@@ -516,6 +518,33 @@ function openAuth(provider: CloudProvider) {
   verificationUrl.value = ''
 }
 
+async function startCloudAuth(provider: CloudProvider) {
+  error.value = ''
+  notice.value = ''
+
+  if (provider.id !== 'google-drive') {
+    openAuth(provider)
+    return
+  }
+
+  startingCloudAuth.value = provider.id
+  try {
+    const response = await getGoogleAuthUrl()
+    if (!response.configured || !response.authUrl) {
+      error.value = t('googleOAuthNotConfigured')
+      openAuth(provider)
+      return
+    }
+    window.open(response.authUrl, '_blank', 'noopener,noreferrer')
+    notice.value = t('googleOAuthOpened')
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t('authFailed')
+    openAuth(provider)
+  } finally {
+    startingCloudAuth.value = null
+  }
+}
+
 function providerAuthCommand(provider: CloudProvider) {
   if (provider.id === 'onedrive') return 'sudo dg auth onedrive'
   if (provider.id === 'google-drive') return 'sudo dg auth google'
@@ -612,6 +641,12 @@ function providerName(providerId: string) {
 
 function providerStateLabel(provider: CloudProvider) {
   return provider.state === 'connected' ? t('connected') : t('needsAuth')
+}
+
+function providerAuthLabel(provider: CloudProvider) {
+  if (startingCloudAuth.value === provider.id) return t('starting')
+  if (provider.id === 'google-drive') return t('openOAuth')
+  return t('authorize')
 }
 
 function formatDate(value: string) {
@@ -948,9 +983,14 @@ onUnmounted(() => {
                 <dd>{{ provider.remotePath }}</dd>
               </div>
             </dl>
-            <button class="primary-button" type="button" @click="openAuth(provider)">
+            <button
+              class="primary-button"
+              type="button"
+              :disabled="startingCloudAuth === provider.id"
+              @click="startCloudAuth(provider)"
+            >
               <KeyRound :size="16" aria-hidden="true" />
-              {{ t('authorize') }}
+              {{ providerAuthLabel(provider) }}
             </button>
           </article>
         </div>

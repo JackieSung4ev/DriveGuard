@@ -1,15 +1,22 @@
 package api
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"html"
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JackieSung4ev/gdrive/server/internal/auth"
@@ -22,14 +29,37 @@ import (
 const maxDecryptUploadBytes int64 = 1024 * 1024 * 1024
 
 type Server struct {
-	driveguard *driveguard.Client
-	jobs       *jobs.Manager
-	plans      *plans.Manager
-	auth       *auth.Store
+	driveguard    *driveguard.Client
+	jobs          *jobs.Manager
+	plans         *plans.Manager
+	auth          *auth.Store
+	googleOAuthMu sync.Mutex
+	googleOAuth   map[string]googleOAuthState
+}
+
+type googleOAuthState struct {
+	RemoteName  string
+	Scope       string
+	RedirectURI string
+	ExpiresAt   time.Time
+}
+
+type googleOAuthConfig struct {
+	ClientID     string
+	ClientSecret string
+	RemoteName   string
+	Scope        string
+	PublicURL    string
 }
 
 func NewServer(client *driveguard.Client, jobManager *jobs.Manager, planManager *plans.Manager, authStore *auth.Store) *Server {
-	return &Server{driveguard: client, jobs: jobManager, plans: planManager, auth: authStore}
+	return &Server{
+		driveguard:  client,
+		jobs:        jobManager,
+		plans:       planManager,
+		auth:        authStore,
+		googleOAuth: map[string]googleOAuthState{},
+	}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -47,6 +77,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/restore/decrypt", s.withAuth(s.handleRestoreDecrypt))
 	mux.HandleFunc("/api/v1/status", s.withAuth(s.handleStatus))
 	mux.HandleFunc("/api/v1/cloud-providers", s.withAuth(s.handleCloudProviders))
+	mux.HandleFunc("/api/v1/cloud/google/auth-url", s.withAuth(s.handleGoogleAuthURL))
+	mux.HandleFunc("/api/v1/cloud/google/callback", s.handleGoogleCallback)
 	mux.HandleFunc("/api/v1/backup-plans", s.withAuth(s.handleBackupPlans))
 	mux.HandleFunc("/api/v1/logs", s.withAuth(s.handleLogs))
 	mux.HandleFunc("/api/v1/jobs/backup", s.withAuth(s.handleStartBackup))
@@ -228,6 +260,105 @@ func (s *Server) handleCloudProviders(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string][]model.CloudProvider{
 		"providers": status.Providers,
 	})
+}
+
+func (s *Server) handleGoogleAuthURL(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	config := googleConfig(r)
+	redirectURI := googleRedirectURI(r, config)
+	if config.ClientID == "" || config.ClientSecret == "" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"configured":  false,
+			"authUrl":     "",
+			"redirectUri": redirectURI,
+			"remoteName":  config.RemoteName,
+			"scope":       config.Scope,
+		})
+		return
+	}
+
+	state, err := randomState()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "unable to create OAuth state")
+		return
+	}
+
+	s.googleOAuthMu.Lock()
+	s.pruneGoogleOAuthLocked()
+	s.googleOAuth[state] = googleOAuthState{
+		RemoteName:  config.RemoteName,
+		Scope:       config.Scope,
+		RedirectURI: redirectURI,
+		ExpiresAt:   time.Now().Add(10 * time.Minute),
+	}
+	s.googleOAuthMu.Unlock()
+
+	authURL, err := googleAuthURL(config.ClientID, redirectURI, googleScopeURL(config.Scope), state)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "unable to create Google authorization URL")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"configured":  true,
+		"authUrl":     authURL,
+		"redirectUri": redirectURI,
+		"remoteName":  config.RemoteName,
+		"scope":       config.Scope,
+	})
+}
+
+func (s *Server) handleGoogleCallback(w http.ResponseWriter, r *http.Request) {
+	if !allowMethod(w, r, http.MethodGet) {
+		return
+	}
+
+	if oauthErr := r.URL.Query().Get("error"); oauthErr != "" {
+		writeOAuthHTML(w, false, "Google authorization failed: "+oauthErr)
+		return
+	}
+
+	stateValue := r.URL.Query().Get("state")
+	code := r.URL.Query().Get("code")
+	if stateValue == "" || code == "" {
+		writeOAuthHTML(w, false, "Google authorization callback is missing state or code.")
+		return
+	}
+
+	state, ok := s.takeGoogleOAuthState(stateValue)
+	if !ok {
+		writeOAuthHTML(w, false, "Google authorization state expired or is invalid. Please start again from DriveGuard.")
+		return
+	}
+
+	config := googleConfig(r)
+	if config.ClientID == "" || config.ClientSecret == "" {
+		writeOAuthHTML(w, false, "Google OAuth client ID or secret is not configured on this server.")
+		return
+	}
+
+	token, err := exchangeGoogleToken(r.Context(), config.ClientID, config.ClientSecret, state.RedirectURI, code)
+	if err != nil {
+		writeOAuthHTML(w, false, err.Error())
+		return
+	}
+
+	tokenJSON, err := rcloneTokenJSON(token)
+	if err != nil {
+		writeOAuthHTML(w, false, err.Error())
+		return
+	}
+
+	configPath, err := s.driveguard.SaveGoogleDriveRemote(r.Context(), state.RemoteName, config.ClientID, config.ClientSecret, state.Scope, tokenJSON)
+	if err != nil {
+		writeOAuthHTML(w, false, "Unable to save rclone Google Drive remote: "+err.Error())
+		return
+	}
+
+	writeOAuthHTML(w, true, "Google Drive authorization saved to "+configPath+". You can close this tab and refresh DriveGuard.")
 }
 
 func (s *Server) handleArchivePassword(w http.ResponseWriter, r *http.Request) {
@@ -447,6 +578,218 @@ func (s *Server) withAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+type googleTokenResponse struct {
+	AccessToken      string `json:"access_token"`
+	TokenType        string `json:"token_type"`
+	RefreshToken     string `json:"refresh_token"`
+	ExpiresIn        int    `json:"expires_in"`
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+}
+
+func googleConfig(r *http.Request) googleOAuthConfig {
+	return googleOAuthConfig{
+		ClientID:     strings.TrimSpace(os.Getenv("DRIVEGUARD_GOOGLE_CLIENT_ID")),
+		ClientSecret: strings.TrimSpace(os.Getenv("DRIVEGUARD_GOOGLE_CLIENT_SECRET")),
+		RemoteName:   envOr("DRIVEGUARD_GOOGLE_REMOTE", "gdrive"),
+		Scope:        rcloneGoogleScope(envOr("DRIVEGUARD_GOOGLE_SCOPE", "drive.file")),
+		PublicURL:    strings.TrimRight(strings.TrimSpace(os.Getenv("DRIVEGUARD_PUBLIC_URL")), "/"),
+	}
+}
+
+func googleRedirectURI(r *http.Request, config googleOAuthConfig) string {
+	base := config.PublicURL
+	if base == "" {
+		scheme := r.Header.Get("X-Forwarded-Proto")
+		if scheme == "" {
+			if r.TLS != nil {
+				scheme = "https"
+			} else {
+				scheme = "http"
+			}
+		}
+		host := r.Header.Get("X-Forwarded-Host")
+		if host == "" {
+			host = r.Host
+		}
+		base = scheme + "://" + host
+	}
+	return strings.TrimRight(base, "/") + "/api/v1/cloud/google/callback"
+}
+
+func googleAuthURL(clientID, redirectURI, scope, state string) (string, error) {
+	values := url.Values{}
+	values.Set("client_id", clientID)
+	values.Set("redirect_uri", redirectURI)
+	values.Set("response_type", "code")
+	values.Set("scope", scope)
+	values.Set("state", state)
+	values.Set("access_type", "offline")
+	values.Set("prompt", "consent")
+	values.Set("include_granted_scopes", "false")
+
+	authURL := url.URL{
+		Scheme:   "https",
+		Host:     "accounts.google.com",
+		Path:     "/o/oauth2/v2/auth",
+		RawQuery: values.Encode(),
+	}
+	return authURL.String(), nil
+}
+
+func googleScopeURL(scope string) string {
+	switch rcloneGoogleScope(scope) {
+	case "drive":
+		return "https://www.googleapis.com/auth/drive"
+	default:
+		return "https://www.googleapis.com/auth/drive.file"
+	}
+}
+
+func rcloneGoogleScope(scope string) string {
+	normalized := strings.TrimSpace(scope)
+	switch normalized {
+	case "https://www.googleapis.com/auth/drive":
+		return "drive"
+	case "https://www.googleapis.com/auth/drive.file":
+		return "drive.file"
+	case "drive":
+		return "drive"
+	default:
+		return "drive.file"
+	}
+}
+
+func exchangeGoogleToken(ctx context.Context, clientID, clientSecret, redirectURI, code string) (googleTokenResponse, error) {
+	values := url.Values{}
+	values.Set("client_id", clientID)
+	values.Set("client_secret", clientSecret)
+	values.Set("redirect_uri", redirectURI)
+	values.Set("code", code)
+	values.Set("grant_type", "authorization_code")
+
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/token", strings.NewReader(values.Encode()))
+	if err != nil {
+		return googleTokenResponse{}, err
+	}
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		return googleTokenResponse{}, fmt.Errorf("Google token exchange failed: %w", err)
+	}
+	defer response.Body.Close()
+
+	var token googleTokenResponse
+	if err := json.NewDecoder(response.Body).Decode(&token); err != nil {
+		return googleTokenResponse{}, fmt.Errorf("Google token response is invalid")
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 || token.Error != "" {
+		message := token.Error
+		if token.ErrorDescription != "" {
+			message = token.ErrorDescription
+		}
+		if message == "" {
+			message = "Google token exchange failed"
+		}
+		return googleTokenResponse{}, fmt.Errorf(message)
+	}
+	if token.AccessToken == "" || token.RefreshToken == "" {
+		return googleTokenResponse{}, fmt.Errorf("Google did not return a refresh token. Revoke the old grant for this OAuth client and try again.")
+	}
+	if token.TokenType == "" {
+		token.TokenType = "Bearer"
+	}
+	if token.ExpiresIn <= 0 {
+		token.ExpiresIn = 3600
+	}
+	return token, nil
+}
+
+func rcloneTokenJSON(token googleTokenResponse) ([]byte, error) {
+	return json.Marshal(map[string]string{
+		"access_token":  token.AccessToken,
+		"token_type":    token.TokenType,
+		"refresh_token": token.RefreshToken,
+		"expiry":        time.Now().Add(time.Duration(token.ExpiresIn) * time.Second).Format(time.RFC3339Nano),
+	})
+}
+
+func randomState() (string, error) {
+	raw := make([]byte, 24)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+func (s *Server) pruneGoogleOAuthLocked() {
+	now := time.Now()
+	for state, entry := range s.googleOAuth {
+		if now.After(entry.ExpiresAt) {
+			delete(s.googleOAuth, state)
+		}
+	}
+}
+
+func (s *Server) takeGoogleOAuthState(value string) (googleOAuthState, bool) {
+	s.googleOAuthMu.Lock()
+	defer s.googleOAuthMu.Unlock()
+
+	s.pruneGoogleOAuthLocked()
+	state, ok := s.googleOAuth[value]
+	if !ok {
+		return googleOAuthState{}, false
+	}
+	delete(s.googleOAuth, value)
+	if time.Now().After(state.ExpiresAt) {
+		return googleOAuthState{}, false
+	}
+	return state, true
+}
+
+func writeOAuthHTML(w http.ResponseWriter, success bool, message string) {
+	status := http.StatusOK
+	title := "DriveGuard authorization complete"
+	if !success {
+		status = http.StatusBadRequest
+		title = "DriveGuard authorization failed"
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = fmt.Fprintf(w, `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>%s</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#f6fbff;color:#172033}
+    main{width:min(560px,calc(100%% - 32px));padding:24px;border:1px solid #dbe8f4;border-radius:8px;background:#fff;box-shadow:0 14px 36px rgba(18,104,216,.08)}
+    h1{margin:0 0 12px;font-size:1.35rem}
+    p{margin:0 0 18px;color:#667085}
+    a{color:#1268d8;font-weight:700}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>%s</h1>
+    <p>%s</p>
+    <a href="/">Back to DriveGuard</a>
+  </main>
+</body>
+</html>`, html.EscapeString(title), html.EscapeString(title), html.EscapeString(message))
+}
+
+func envOr(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func decryptedDownloadName(name string) string {

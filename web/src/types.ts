@@ -124,3 +124,11 @@ export interface TotpSetupResponse {
   secret: string
   otpauthUrl: string
 }
+
+export interface CloudAuthUrlResponse {
+  configured: boolean
+  authUrl: string
+  redirectUri: string
+  remoteName: string
+  scope: string
+}

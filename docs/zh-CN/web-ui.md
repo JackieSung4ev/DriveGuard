@@ -53,7 +53,13 @@ web/
 
 第一期云盘先收窄到 Google Drive 和 Microsoft OneDrive，底层仍通过 `rclone` 授权和上传。
 
-授权界面采用三步流程：复制指定云盘的 `dg auth` 命令、打开生成的 OAuth 链接、再把跳转后的验证 URL 粘贴回来确认。Web UI 分支里 `sudo dg auth` 会变成云盘选择器，也支持 `sudo dg auth google` 和 `sudo dg auth onedrive` 直接进入指定云盘授权；高级 `rclone config` 仍保留为兜底入口。
+Google Drive 在服务器配置 `DRIVEGUARD_PUBLIC_URL`、`DRIVEGUARD_GOOGLE_CLIENT_ID` 和 `DRIVEGUARD_GOOGLE_CLIENT_SECRET` 后，可以走 Web OAuth 直连授权。Google OAuth 客户端需要是 Web application 类型，并加入这个 Authorized redirect URI：
+
+```text
+${DRIVEGUARD_PUBLIC_URL}/api/v1/cloud/google/callback
+```
+
+回调会在服务器端交换授权码，并把 token 写入 rclone remote，默认 remote 是 `gdrive:`。如果未配置 Google Web OAuth，授权界面仍回退到三步 CLI 流程：复制指定云盘的 `dg auth` 命令、打开生成的 OAuth 链接、再把跳转后的验证 URL 粘贴回来确认。Web UI 分支里 `sudo dg auth` 会变成云盘选择器，也支持 `sudo dg auth google` 和 `sudo dg auth onedrive` 直接进入指定云盘授权；高级 `rclone config` 仍保留为兜底入口。
 
 ## API 初版
 
@@ -71,6 +77,8 @@ POST /api/v1/security/archive-password
 POST /api/v1/restore/decrypt
 GET  /api/v1/status
 GET  /api/v1/cloud-providers
+GET  /api/v1/cloud/google/auth-url
+GET  /api/v1/cloud/google/callback
 GET  /api/v1/backup-plans
 POST /api/v1/backup-plans
 GET  /api/v1/logs?lines=80

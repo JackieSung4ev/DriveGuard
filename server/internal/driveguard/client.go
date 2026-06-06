@@ -179,6 +179,83 @@ func (c *Client) SetArchivePassword(ctx context.Context, password string) (strin
 	return passwordFile, nil
 }
 
+func (c *Client) SaveGoogleDriveRemote(ctx context.Context, remoteName, clientID, clientSecret, scope string, tokenJSON []byte) (string, error) {
+	remoteName = strings.TrimSuffix(strings.TrimSpace(remoteName), ":")
+	if remoteName == "" {
+		remoteName = "gdrive"
+	}
+	if strings.ContainsAny(remoteName, "[]\r\n") {
+		return "", fmt.Errorf("invalid rclone remote name")
+	}
+	if strings.TrimSpace(clientID) == "" || strings.TrimSpace(clientSecret) == "" {
+		return "", fmt.Errorf("Google OAuth client ID and secret are required")
+	}
+	if strings.TrimSpace(scope) == "" {
+		scope = "drive.file"
+	}
+	if len(tokenJSON) == 0 {
+		return "", fmt.Errorf("Google OAuth token is empty")
+	}
+
+	configPath := c.RcloneConfigFile(ctx)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0700); err != nil {
+		return "", err
+	}
+
+	raw, err := os.ReadFile(configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+
+	section := []string{
+		"[" + remoteName + "]",
+		"type = drive",
+		"client_id = " + strings.TrimSpace(clientID),
+		"client_secret = " + strings.TrimSpace(clientSecret),
+		"scope = " + strings.TrimSpace(scope),
+		"token = " + strings.TrimSpace(string(tokenJSON)),
+	}
+	updated := replaceConfigSection(string(raw), remoteName, section)
+	if err := os.WriteFile(configPath, []byte(updated), 0600); err != nil {
+		return "", err
+	}
+	return configPath, nil
+}
+
+func (c *Client) RcloneConfigFile(ctx context.Context) string {
+	if configured := strings.TrimSpace(os.Getenv("RCLONE_CONFIG")); configured != "" {
+		return configured
+	}
+
+	configCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	output, err := c.runCommand(configCtx, "rclone", "config", "file")
+	if err == nil {
+		scanner := bufio.NewScanner(strings.NewReader(output))
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" || strings.Contains(line, "Configuration file") {
+				continue
+			}
+			if strings.Contains(line, "rclone.conf") {
+				return line
+			}
+		}
+	}
+
+	if runtime.GOOS == "windows" {
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			return filepath.Join(appData, "rclone", "rclone.conf")
+		}
+		return "rclone.conf"
+	}
+	if home := os.Getenv("HOME"); home != "" {
+		return filepath.Join(home, ".config", "rclone", "rclone.conf")
+	}
+	return "/root/.config/rclone/rclone.conf"
+}
+
 func (c *Client) DecryptFile(ctx context.Context, source, destination string) error {
 	if strings.TrimSpace(source) == "" || strings.TrimSpace(destination) == "" {
 		return fmt.Errorf("source and destination are required")
@@ -220,6 +297,57 @@ func (c *Client) DecryptFile(ctx context.Context, source, destination string) er
 		return fmt.Errorf("decrypt failed: %s", message)
 	}
 	return nil
+}
+
+func (c *Client) runCommand(ctx context.Context, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+
+	err := cmd.Run()
+	return trimOutput(output.String()), err
+}
+
+func replaceConfigSection(raw, sectionName string, section []string) string {
+	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
+	header := "[" + sectionName + "]"
+	result := []string{}
+	inserted := false
+
+	for i := 0; i < len(lines); {
+		line := lines[i]
+		if strings.TrimSpace(line) == header {
+			if len(result) > 0 && strings.TrimSpace(result[len(result)-1]) != "" {
+				result = append(result, "")
+			}
+			result = append(result, section...)
+			inserted = true
+			i++
+			for i < len(lines) && !isConfigSectionHeader(lines[i]) {
+				i++
+			}
+			continue
+		}
+		result = append(result, line)
+		i++
+	}
+
+	for len(result) > 0 && strings.TrimSpace(result[len(result)-1]) == "" {
+		result = result[:len(result)-1]
+	}
+	if !inserted {
+		if len(result) > 0 {
+			result = append(result, "")
+		}
+		result = append(result, section...)
+	}
+	return strings.Join(result, "\n") + "\n"
+}
+
+func isConfigSectionHeader(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	return strings.HasPrefix(trimmed, "[") && strings.HasSuffix(trimmed, "]")
 }
 
 func defaultArchivePasswordFile() string {
