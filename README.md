@@ -97,6 +97,25 @@ npm run dev
 
 The Vite dev server proxies `/api` to `http://127.0.0.1:8080`. See [Web UI plan](docs/web-ui.md) for the repository layout and API boundary.
 
+## Web UI Deployment Script
+
+The `feature/web-ui` branch includes a server-side helper for the Web UI product:
+
+```bash
+sudo bash driveguard-web.sh --lang zh menu
+```
+
+Common commands:
+
+```bash
+sudo WEB_ROOT=/www/wwwroot/example.com bash driveguard-web.sh install
+sudo PUBLIC_URL=https://backup.example.com bash driveguard-web.sh oauth /root/client_secret.json
+sudo WEB_ROOT=/www/wwwroot/example.com bash driveguard-web.sh update
+sudo bash driveguard-web.sh status
+```
+
+The script supports English/Chinese menus, dependency checks, system install, update, uninstall, backend-only updates, frontend-only updates, API health checks, and Google OAuth client ID/secret extraction from a Google OAuth client JSON file.
+
 ## 📁 Key Paths
 
 ```text

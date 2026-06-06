@@ -93,6 +93,27 @@ The API should default to `127.0.0.1` during development. Public deployment shou
 
 The local account system stores password hashes with PBKDF2-HMAC-SHA256, uses HttpOnly SameSite session cookies, protects mutating API calls with CSRF tokens, and supports TOTP two-factor authentication. The default auth file is `/etc/driveguard/web-auth.json` on Linux/macOS and `driveguard-auth.json` on Windows development machines.
 
+## Deployment Script
+
+`driveguard-web.sh` is the Web UI product installer and maintenance helper. It keeps the stable CLI installer separate while automating the Web UI-specific work:
+
+- English/Chinese menu selection
+- Dependency installation and version checks for Go, Node.js, rclone, git, curl, rsync, and cron
+- System install for `driveguardd`, the systemd unit, the frontend build, and static web publishing
+- Full updates, backend-only updates, and frontend-only updates
+- API health checks, systemd state checks, and journal log viewing
+- Google OAuth setup, including client ID/secret extraction from a Google OAuth client JSON file
+- Web UI uninstall while keeping CLI config and backup files by default
+
+Example:
+
+```bash
+sudo WEB_ROOT=/www/wwwroot/backup.example.com bash driveguard-web.sh install
+sudo PUBLIC_URL=https://backup.example.com bash driveguard-web.sh oauth /root/client_secret.json
+sudo WEB_ROOT=/www/wwwroot/backup.example.com bash driveguard-web.sh update
+sudo bash driveguard-web.sh status
+```
+
 ## Security Notes
 
 - Do not expose DriveGuard on a public interface without TLS and authentication.
