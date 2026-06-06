@@ -1,5 +1,7 @@
 # DriveGuard Wiki
 
+**Languages:** [English](README.md) | [中文](zh-CN/wiki.md)
+
 This folder contains task-oriented DriveGuard documentation. The root README stays focused on the project overview, quick start, and common commands; detailed setup, authorization, restore, and troubleshooting steps live here.
 
 ## Documents

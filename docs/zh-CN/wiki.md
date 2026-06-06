@@ -1,5 +1,7 @@
 # DriveGuard Wiki
 
+**语言 / Languages:** [中文](wiki.md) | [English](../README.md)
+
 这里存放 DriveGuard 的场景化操作文档。根目录 README 保持项目概览、快速开始和常用命令；更细的配置、授权、恢复和排障步骤放在 Wiki 文档里。
 
 ## 文档列表

@@ -1,5 +1,7 @@
 # DriveGuard
 
+**语言 / Languages:** [中文](README.md) | [English](../../README.md)
+
 ![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
 ![Remote](https://img.shields.io/badge/remote-rclone-3F79AD)
 ![Database](https://img.shields.io/badge/database-MySQL%20%7C%20MariaDB%20%7C%20PostgreSQL-336791)
@@ -39,7 +41,7 @@ git clone https://github.com/JackieSung4ev/DriveGuard.git
 cd DriveGuard
 sudo bash driveguard.sh install
 sudo dg install-deps
-sudo dg auth
+sudo dg auth google
 sudo dg configure
 sudo dg backup
 ```
@@ -67,7 +69,8 @@ sudo dg install-guard
 | `sudo dg menu` | 打开中文菜单 |
 | `sudo dg update` | 从 GitHub 拉取并更新脚本 |
 | `sudo dg install-deps` | 安装系统依赖 |
-| `sudo dg auth` | 配置或检查 `rclone` remote |
+| `sudo dg auth` | 选择 Google Drive、OneDrive 或高级 `rclone` 授权 |
+| `sudo dg auth google` / `sudo dg auth onedrive` | 直接进入指定云盘的授权流程 |
 | `sudo dg configure` | 配置 remote、密码、数据库连接和定时参数 |
 | `sudo dg backup` | 立即执行一次备份 |
 | `sudo dg decrypt 源.enc 输出文件` | 解密备份文件 |

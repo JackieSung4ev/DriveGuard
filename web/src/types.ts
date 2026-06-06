@@ -2,6 +2,9 @@ export type TargetType = 'site' | 'mysql' | 'postgresql'
 export type TargetState = 'ready' | 'warning' | 'disabled'
 export type CheckState = 'ok' | 'warning' | 'error'
 export type JobState = 'queued' | 'running' | 'success' | 'failed'
+export type ProviderState = 'connected' | 'needs_auth' | 'disabled'
+export type BackupKind = 'website' | 'database' | 'full'
+export type PlanState = 'ready' | 'draft' | 'disabled'
 
 export interface BackupTarget {
   id: string
@@ -18,6 +21,34 @@ export interface StatusCheck {
   label: string
   value: string
   state: CheckState
+}
+
+export interface CloudProvider {
+  id: string
+  name: string
+  type: string
+  state: ProviderState
+  remoteName: string
+  remotePath: string
+  description: string
+  authCommand: string
+  checkCommand: string
+}
+
+export interface BackupPlan {
+  id: string
+  name: string
+  kind: BackupKind
+  target: string
+  providerId: string
+  remotePath: string
+  cron: string
+  retentionCopies: number
+  encrypted: boolean
+  enabled: boolean
+  state: PlanState
+  nextRun: string
+  lastRun: string
 }
 
 export interface JobSummary {
@@ -58,6 +89,8 @@ export interface DriveGuardStatus {
     lastRun: string
   }
   targets: BackupTarget[]
+  providers: CloudProvider[]
+  plans: BackupPlan[]
   checks: StatusCheck[]
   jobs: JobSummary[]
   logs: LogLine[]
@@ -65,4 +98,29 @@ export interface DriveGuardStatus {
 
 export interface StartBackupResponse {
   job: JobSummary
+}
+
+export type CreateBackupPlanRequest = Omit<BackupPlan, 'id' | 'state' | 'nextRun' | 'lastRun'>
+
+export interface CreateBackupPlanResponse {
+  plan: BackupPlan
+}
+
+export interface AuthState {
+  configured: boolean
+  authenticated: boolean
+  username?: string
+  twoFactorEnabled: boolean
+  csrfToken?: string
+}
+
+export interface LoginResponse {
+  requiresTotp: boolean
+  state?: AuthState
+  message?: string
+}
+
+export interface TotpSetupResponse {
+  secret: string
+  otpauthUrl: string
 }

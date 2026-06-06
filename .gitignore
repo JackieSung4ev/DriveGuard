@@ -9,6 +9,7 @@ config.conf
 *.pass
 mysql.cnf
 *.cnf.local
+driveguard-auth.json
 
 # Logs
 *.log
@@ -35,6 +36,7 @@ web/node_modules/
 web/dist/
 web/.vite/
 web/.env.local
+web/btgdrive/
 
 # Go backend
 server/bin/

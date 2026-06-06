@@ -1,5 +1,7 @@
 # DriveGuard
 
+**Languages:** [English](README.md) | [中文](docs/zh-CN/README.md)
+
 ![Shell](https://img.shields.io/badge/shell-bash-4EAA25)
 ![Remote](https://img.shields.io/badge/remote-rclone-3F79AD)
 ![Database](https://img.shields.io/badge/database-MySQL%20%7C%20MariaDB%20%7C%20PostgreSQL-336791)
@@ -17,7 +19,7 @@ sudo dg menu
 
 The shell-based version remains the stable command-line version for the current scope: install, dependency checks, encrypted website backups, MySQL/MariaDB/PostgreSQL backups, auto-discovery, scheduled jobs, remote upload, retention cleanup, restore helpers, and self-update.
 
-The next generation Web UI is planned inside this repository as a monorepo: `web/` for the Vue 3 + Vite console, `server/` for the Go API service, and `driveguard.sh` kept as the compatibility entrypoint. Split repositories later only if the Web UI becomes a separate product line.
+The next generation Web UI is planned inside this repository as a monorepo: `web/` for the Vue 3 + Vite console, `server/` for the Go API service, and `driveguard.sh` kept as the compatibility entrypoint. The first Web workflow focuses on local account security, Google Drive and Microsoft OneDrive authorization, and scheduled backup plans. Split repositories later only if the Web UI becomes a separate product line.
 
 ## ✨ Features
 
@@ -39,7 +41,7 @@ git clone https://github.com/JackieSung4ev/DriveGuard.git
 cd DriveGuard
 sudo bash driveguard.sh install
 sudo dg install-deps
-sudo dg auth
+sudo dg auth google
 sudo dg configure
 sudo dg backup
 ```
@@ -69,7 +71,8 @@ sudo dg install-guard
 | `sudo dg menu` | Open the interactive menu |
 | `sudo dg update` | Pull the latest GitHub version and reinstall |
 | `sudo dg install-deps` | Install system dependencies |
-| `sudo dg auth` | Configure or verify the `rclone` remote |
+| `sudo dg auth` | Choose Google Drive, OneDrive, or advanced `rclone` authorization |
+| `sudo dg auth google` / `sudo dg auth onedrive` | Start provider-specific cloud authorization |
 | `sudo dg configure` | Configure the remote, password, database connections, and schedule |
 | `sudo dg backup` | Run a backup immediately |
 | `sudo dg decrypt source.enc output` | Decrypt a backup file |

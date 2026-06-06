@@ -398,6 +398,77 @@ configure_rclone_remote() {
   check_rclone_remote
 }
 
+configure_quick_cloud_remote() {
+  require_root
+  load_config
+  ensure_dirs
+  have rclone || die "rclone not found; install dependencies first"
+
+  local provider="${1:-}"
+  local backend remote label
+  case "${provider,,}" in
+    google|gdrive|google-drive|drive)
+      backend="drive"
+      remote="gdrive"
+      label="Google Drive"
+      ;;
+    onedrive|one-drive|microsoft|microsoft-onedrive)
+      backend="onedrive"
+      remote="onedrive"
+      label="Microsoft OneDrive"
+      ;;
+    *)
+      die "Unknown cloud provider: ${provider}. Use google or onedrive."
+      ;;
+  esac
+
+  printf '\n%s quick authorization\n' "$label"
+  printf '1. DriveGuard will create or reconnect the rclone remote: %s:\n' "$remote"
+  printf '2. Open the OAuth link shown by rclone in your browser.\n'
+  printf '3. Paste the returned token or URL when prompted.\n\n'
+
+  local input
+  read -r -p "Remote name [${remote}]: " input
+  if [[ -n "$input" ]]; then
+    remote="$input"
+  fi
+
+  if rclone listremotes | grep -qx "${remote}:"; then
+    if confirm "Detected ${remote}: already exists. Reconnect it now"; then
+      rclone config reconnect "${remote}:"
+    else
+      printf 'Keeping existing remote: %s:\n' "$remote"
+    fi
+  else
+    rclone config create "$remote" "$backend" config_is_local=false
+  fi
+
+  RCLONE_REMOTE="$remote"
+  save_config
+  check_rclone_remote
+}
+
+configure_cloud_auth() {
+  local provider="${1:-}"
+  if [[ -n "$provider" ]]; then
+    configure_quick_cloud_remote "$provider"
+    return
+  fi
+
+  printf '\nCloud authorization\n'
+  printf '1. Google Drive\n'
+  printf '2. Microsoft OneDrive\n'
+  printf '3. Advanced rclone config\n'
+  read -r -p "Choose provider [1]: " provider
+
+  case "${provider:-1}" in
+    1|google|gdrive|google-drive) configure_quick_cloud_remote google ;;
+    2|onedrive|one-drive|microsoft) configure_quick_cloud_remote onedrive ;;
+    3|advanced|rclone) configure_rclone_remote ;;
+    *) die "Invalid provider choice" ;;
+  esac
+}
+
 set_archive_password() {
   require_root
   load_config
@@ -1296,7 +1367,7 @@ Usage:
   $0 install           Install/update driveguard and dg commands
   $0 update            Pull from Git repository and update script
   $0 install-deps      Install Debian/Ubuntu/CentOS/RHEL dependencies
-  $0 auth              Configure/check rclone remote
+  $0 auth [provider]   Authorize Google Drive/OneDrive, or open provider picker
   $0 configure         Configure base settings, passwords, and MySQL/PostgreSQL connections
   $0 cron              Install/update cron jobs
   $0 install-guard     Install systemd cron guard timer
@@ -1318,7 +1389,7 @@ main() {
     install) install_cli ;;
     update) update_self ;;
     install-deps) install_dependencies ;;
-    auth) configure_rclone_remote ;;
+    auth) configure_cloud_auth "${2:-}" ;;
     configure) configure_general ;;
     cron) install_cron_entries ;;
     install-guard) install_systemd_guard ;;

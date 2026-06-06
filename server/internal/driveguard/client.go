@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -96,6 +97,8 @@ func (c *Client) Dashboard(ctx context.Context) model.DriveGuardStatus {
 	applyStatusValues(&dashboard, values)
 	dashboard.Targets = readTargets(values)
 	dashboard.Metrics = countTargets(dashboard.Metrics, dashboard.Targets)
+	dashboard.Providers = buildProviders(values)
+	dashboard.Plans = DefaultPlans()
 	dashboard.Checks = buildChecks(scriptPath, values, err)
 	dashboard.Logs = c.LogLines(ctx, 20)
 
@@ -104,6 +107,26 @@ func (c *Client) Dashboard(ctx context.Context) model.DriveGuardStatus {
 	}
 
 	return dashboard
+}
+
+func DefaultPlans() []model.BackupPlan {
+	return []model.BackupPlan{
+		{
+			ID:              "plan-default-full",
+			Name:            "每日全量备份",
+			Kind:            model.BackupKindFull,
+			Target:          "all configured websites and databases",
+			ProviderID:      "google-drive",
+			RemotePath:      "driveguard",
+			Cron:            "0 3 * * *",
+			RetentionCopies: 7,
+			Encrypted:       true,
+			Enabled:         true,
+			State:           model.PlanReady,
+			NextRun:         "03:00 daily",
+			LastRun:         "",
+		},
+	}
 }
 
 func (c *Client) LogLines(ctx context.Context, limit int) []model.LogLine {
@@ -125,6 +148,85 @@ func (c *Client) LogLines(ctx context.Context, limit int) []model.LogLine {
 	}
 
 	return parseLogLines(output)
+}
+
+func (c *Client) ArchivePasswordFile(ctx context.Context) string {
+	statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	output, _ := c.Run(statusCtx, "status")
+	if passwordFile := parseStatus(output)["password file"]; passwordFile != "" {
+		return passwordFile
+	}
+	return defaultArchivePasswordFile()
+}
+
+func (c *Client) SetArchivePassword(ctx context.Context, password string) (string, error) {
+	if len(password) < 12 {
+		return "", fmt.Errorf("archive password must be at least 12 characters")
+	}
+	if strings.ContainsAny(password, "\r\n") {
+		return "", fmt.Errorf("archive password cannot contain newlines")
+	}
+
+	passwordFile := c.ArchivePasswordFile(ctx)
+	if err := os.MkdirAll(filepath.Dir(passwordFile), 0700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(passwordFile, []byte(password), 0600); err != nil {
+		return "", err
+	}
+	return passwordFile, nil
+}
+
+func (c *Client) DecryptFile(ctx context.Context, source, destination string) error {
+	if strings.TrimSpace(source) == "" || strings.TrimSpace(destination) == "" {
+		return fmt.Errorf("source and destination are required")
+	}
+
+	passwordFile := c.ArchivePasswordFile(ctx)
+	if _, err := os.Stat(passwordFile); err != nil {
+		return fmt.Errorf("archive password file is not configured")
+	}
+
+	decryptCtx, cancel := context.WithTimeout(ctx, 45*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(
+		decryptCtx,
+		"openssl",
+		"enc",
+		"-d",
+		"-aes-256-cbc",
+		"-pbkdf2",
+		"-iter",
+		"200000",
+		"-in",
+		source,
+		"-out",
+		destination,
+		"-pass",
+		"file:"+passwordFile,
+	)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+
+	if err := cmd.Run(); err != nil {
+		message := strings.TrimSpace(trimOutput(output.String()))
+		if message == "" {
+			message = err.Error()
+		}
+		return fmt.Errorf("decrypt failed: %s", message)
+	}
+	return nil
+}
+
+func defaultArchivePasswordFile() string {
+	if runtime.GOOS == "windows" {
+		return "driveguard-archive.pass"
+	}
+	return "/etc/driveguard/archive.pass"
 }
 
 var statusLinePattern = regexp.MustCompile(`^\s*([^:]+):\s*(.*)$`)
@@ -192,6 +294,45 @@ func buildChecks(scriptPath string, values map[string]string, commandErr error) 
 	}
 
 	return checks
+}
+
+func buildProviders(values map[string]string) []model.CloudProvider {
+	remote := strings.TrimSuffix(values["rclone remote"], ":")
+	remotePath := valueOr(values["remote directory"], "driveguard")
+	googleState := model.ProviderNeedsAuth
+	oneDriveState := model.ProviderNeedsAuth
+
+	switch {
+	case strings.Contains(strings.ToLower(remote), "google"), strings.Contains(strings.ToLower(remote), "gdrive"), strings.Contains(strings.ToLower(remote), "drive"):
+		googleState = model.ProviderConnected
+	case strings.Contains(strings.ToLower(remote), "one"):
+		oneDriveState = model.ProviderConnected
+	}
+
+	return []model.CloudProvider{
+		{
+			ID:           "google-drive",
+			Name:         "Google Drive",
+			Type:         "drive",
+			State:        googleState,
+			RemoteName:   providerRemoteName(remote, "gdrive"),
+			RemotePath:   remotePath,
+			Description:  "通过 rclone 授权 Google Drive，适合已有 Google 云盘或 Workspace 账号的服务器备份。",
+			AuthCommand:  "sudo dg auth google",
+			CheckCommand: "rclone lsd gdrive:",
+		},
+		{
+			ID:           "onedrive",
+			Name:         "Microsoft OneDrive",
+			Type:         "onedrive",
+			State:        oneDriveState,
+			RemoteName:   providerRemoteName(remote, "onedrive"),
+			RemotePath:   remotePath,
+			Description:  "通过 rclone 授权 OneDrive，适合 Microsoft 365 或个人 OneDrive 备份空间。",
+			AuthCommand:  "sudo dg auth onedrive",
+			CheckCommand: "rclone lsd onedrive:",
+		},
+	}
 }
 
 func readTargets(values map[string]string) []model.BackupTarget {
@@ -350,6 +491,13 @@ func valueOr(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func providerRemoteName(remote, fallback string) string {
+	if remote == "" {
+		return fallback
+	}
+	return remote
 }
 
 func sanitizeID(value string) string {
