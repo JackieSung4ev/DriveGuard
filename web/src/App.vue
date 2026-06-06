@@ -186,6 +186,14 @@ const targetOptions = computed(() => {
     .map((target) => ({ value: target.id, label: `${target.name} · ${target.location}` }))
 })
 
+const displayTargetOptions = computed(() =>
+  targetOptions.value.map((option) => {
+    const target = targets.value.find((item) => item.id === option.value)
+    if (!target) return option
+    return { value: target.id, label: `${target.name} - ${target.location}` }
+  })
+)
+
 watch(locale, (value, oldValue) => {
   window.localStorage.setItem('driveguard-locale', value)
   if (planForm.name === messages[oldValue].defaultPlanName) {
@@ -196,7 +204,7 @@ watch(locale, (value, oldValue) => {
 watch(
   () => planForm.kind,
   () => {
-    const options = targetOptions.value
+    const options = displayTargetOptions.value
     if (!options.some((target) => target.value === planForm.target)) {
       planForm.target = options[0]?.value || 'all'
     }
@@ -1140,7 +1148,7 @@ onUnmounted(() => {
             <label>
               <span>{{ t('backupTarget') }}</span>
               <select v-model="planForm.target">
-                <option v-for="target in targetOptions" :key="target.value" :value="target.value">
+                <option v-for="target in displayTargetOptions" :key="target.value" :value="target.value">
                   {{ target.label }}
                 </option>
               </select>
