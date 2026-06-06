@@ -100,7 +100,7 @@ The local account system stores password hashes with PBKDF2-HMAC-SHA256, uses Ht
 - English/Chinese menu selection
 - Dependency installation and version checks for Go, Node.js, rclone, git, curl, rsync, and cron
 - System install for `driveguardd`, the systemd unit, the frontend build, and static web publishing
-- Full updates, backend-only updates, and frontend-only updates
+- Full updates, backend-only updates, and frontend-only updates. If `WEB_ROOT` is not set, frontend publishing auto-detects the Nginx/server-panel site root that proxies `/api` to `driveguardd`.
 - API health checks, systemd state checks, and journal log viewing
 - Google OAuth setup, including client ID/secret extraction from a Google OAuth client JSON file
 - Web UI uninstall while keeping CLI config and backup files by default
@@ -108,11 +108,13 @@ The local account system stores password hashes with PBKDF2-HMAC-SHA256, uses Ht
 Example:
 
 ```bash
-sudo WEB_ROOT=/www/wwwroot/backup.example.com bash driveguard-web.sh install
+sudo bash driveguard-web.sh install
 sudo PUBLIC_URL=https://backup.example.com bash driveguard-web.sh oauth /root/client_secret.json
-sudo WEB_ROOT=/www/wwwroot/backup.example.com bash driveguard-web.sh update
+sudo bash driveguard-web.sh update
 sudo bash driveguard-web.sh status
 ```
+
+Set `WEB_ROOT=/www/wwwroot/backup.example.com` only when you need to override auto-detection.
 
 ## Security Notes
 

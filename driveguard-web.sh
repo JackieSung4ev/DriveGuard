@@ -6,7 +6,12 @@ SERVICE_NAME="driveguardd"
 REPO_URL="${REPO_URL:-https://github.com/JackieSung4ev/DriveGuard.git}"
 BRANCH="${BRANCH:-main}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/driveguard-web}"
-WEB_ROOT="${WEB_ROOT:-/var/www/driveguard}"
+DEFAULT_WEB_ROOT="/var/www/driveguard"
+WEB_ROOT_EXPLICIT=0
+if [[ -n "${WEB_ROOT+x}" ]]; then
+  WEB_ROOT_EXPLICIT=1
+fi
+WEB_ROOT="${WEB_ROOT:-$DEFAULT_WEB_ROOT}"
 API_ADDR="${DRIVEGUARD_ADDR:-127.0.0.1:8080}"
 GO_VERSION="${GO_VERSION:-1.22.12}"
 ENV_DIR="${ENV_DIR:-/etc/driveguard}"
@@ -68,6 +73,8 @@ msg() {
     zh:building_frontend) printf '正在构建前端\n' ;;
     zh:publishing_frontend) printf '正在发布前端到 %s\n' "$WEB_ROOT" ;;
     zh:restarting_service) printf '正在重启 %s\n' "$SERVICE_NAME" ;;
+    zh:detected_web_root) printf '检测到当前 Nginx/宝塔站点目录：%s\n' "$WEB_ROOT" ;;
+    zh:multiple_web_roots) printf '检测到多个可能的站点目录，保留当前 WEB_ROOT：%s\n' "$WEB_ROOT" ;;
     en:need_root) printf 'Please run as root, for example: sudo bash driveguard-web.sh %s\n' "${2:-install}" ;;
     en:missing_source) printf 'Current directory is not a DriveGuard repository and %s was not found\n' "$SOURCE_DIR" ;;
     en:deps_done) printf 'Dependency check complete\n' ;;
@@ -87,6 +94,8 @@ msg() {
     en:building_frontend) printf 'Building frontend\n' ;;
     en:publishing_frontend) printf 'Publishing frontend to %s\n' "$WEB_ROOT" ;;
     en:restarting_service) printf 'Restarting %s\n' "$SERVICE_NAME" ;;
+    en:detected_web_root) printf 'Detected current Nginx/panel web root: %s\n' "$WEB_ROOT" ;;
+    en:multiple_web_roots) printf 'Detected multiple possible web roots; keeping WEB_ROOT: %s\n' "$WEB_ROOT" ;;
     *) printf '%s\n' "$key" ;;
   esac
 }
@@ -280,6 +289,88 @@ update_source() {
   fi
 }
 
+detect_nginx_web_roots() {
+  have nginx || return 0
+  local nginx_config
+  nginx_config="$(nginx -T 2>/dev/null || true)"
+  [[ -n "$nginx_config" ]] || return 0
+  printf '%s\n' "$nginx_config" | awk -v api="$API_ADDR" '
+    function begin_server() {
+      inside = 1
+      depth = 0
+      root = ""
+      api_match = 0
+    }
+    function clean_root(value) {
+      sub(/^[ \t]*root[ \t]+/, "", value)
+      sub(/[ \t]*;.*/, "", value)
+      gsub(/["'\''"]/, "", value)
+      return value
+    }
+    {
+      line = $0
+      if (pending && line ~ /^[ \t]*\{/) {
+        pending = 0
+        begin_server()
+      } else if (line ~ /^[ \t]*server[ \t]*\{/) {
+        begin_server()
+      } else if (line ~ /^[ \t]*server[ \t]*$/) {
+        pending = 1
+        next
+      }
+
+      if (inside) {
+        if (line ~ /^[ \t]*root[ \t]+/) {
+          root = clean_root(line)
+        }
+        if (line ~ "proxy_pass[ \t]+http://" api || line ~ /proxy_pass[ \t]+http:\/\/127[.]0[.]0[.]1:8080/) {
+          api_match = 1
+        }
+        open_line = line
+        close_line = line
+        opens = gsub(/\{/, "{", open_line)
+        closes = gsub(/\}/, "}", close_line)
+        depth += opens - closes
+        if (depth <= 0) {
+          if (api_match && root ~ /^\//) {
+            print root
+          }
+          inside = 0
+          pending = 0
+        }
+      }
+    }
+  ' | sort -u
+}
+
+resolve_web_root() {
+  if [[ "$WEB_ROOT_EXPLICIT" == "1" ]]; then
+    return 0
+  fi
+
+  local roots=()
+  local root
+  while IFS= read -r root; do
+    [[ -n "$root" ]] || continue
+    roots+=("$root")
+  done < <(detect_nginx_web_roots)
+
+  case "${#roots[@]}" in
+    0)
+      return 0
+      ;;
+    1)
+      if [[ "${roots[0]}" != "$WEB_ROOT" ]]; then
+        WEB_ROOT="${roots[0]}"
+        msg detected_web_root
+      fi
+      ;;
+    *)
+      msg multiple_web_roots
+      ;;
+  esac
+}
+
 ensure_env_file() {
   require_root
   install -d -m 0700 "$ENV_DIR"
@@ -429,6 +520,7 @@ build_frontend() {
 publish_frontend() {
   require_root frontend
   ensure_source
+  resolve_web_root
   [[ -d "$SOURCE_DIR/web/dist" ]] || build_frontend
   msg publishing_frontend
   install -d -m 0755 "$WEB_ROOT"
@@ -481,6 +573,7 @@ restart_service() {
 }
 
 status_check() {
+  resolve_web_root
   msg status_title
   printf 'Source: %s\n' "$SOURCE_DIR"
   printf 'Web root: %s\n' "$WEB_ROOT"
@@ -578,8 +671,12 @@ Options/env:
   GOOGLE_REMOTE=gdrive
   GOOGLE_SCOPE=drive.file
 
+When WEB_ROOT is not set, install/update/update-frontend try to detect the
+current Nginx or server-panel root that proxies /api to driveguardd.
+
 Examples:
   sudo bash driveguard-web.sh --lang zh install
+  sudo bash driveguard-web.sh update
   sudo WEB_ROOT=/www/wwwroot/example.com bash driveguard-web.sh update
   sudo PUBLIC_URL=https://backup.example.com bash driveguard-web.sh oauth /root/client_secret.json
 EOF
@@ -662,6 +759,7 @@ parse_args() {
         ;;
       --web-root)
         WEB_ROOT="${2:?}"
+        WEB_ROOT_EXPLICIT=1
         shift 2
         ;;
       --public-url)

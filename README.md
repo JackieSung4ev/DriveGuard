@@ -68,6 +68,8 @@ The shell-based CLI remains the stable compatibility entrypoint for terminal use
 | `sudo bash driveguard-web.sh restart` | Restart the backend service |
 | `sudo bash driveguard-web.sh uninstall` | Remove the Web API service and static frontend |
 
+When `WEB_ROOT` is not set, `install`, `update`, and `update-frontend` try to detect the active Nginx/server-panel site root that proxies `/api` to `driveguardd`. Set `WEB_ROOT=/path/to/site` only when you want to override that detection.
+
 ## 📚 Documentation
 
 | Document | When to use it |
