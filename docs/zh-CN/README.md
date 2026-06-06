@@ -28,7 +28,8 @@ sudo bash driveguard-web.sh install
 服务器上已经安装过？可以一条命令更新 Web UI、后端、CLI 包装脚本和发布后的前端：
 
 ```bash
-sudo BRANCH=main bash driveguard-web.sh update
+cd /opt/driveguard-web
+sudo bash driveguard-web.sh update
 ```
 
 想使用纯命令行流程？请跳到 [CLI 快速开始](#-cli-快速开始)。

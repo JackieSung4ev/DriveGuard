@@ -27,7 +27,8 @@ sudo bash driveguard-web.sh install
 Already installed on a server? Pull the latest Web UI, backend, CLI wrapper, and published frontend:
 
 ```bash
-sudo BRANCH=main bash driveguard-web.sh update
+cd /opt/driveguard-web
+sudo bash driveguard-web.sh update
 ```
 
 Prefer a pure command-line workflow? Jump to the [CLI quick start](#cli-quick-start).
