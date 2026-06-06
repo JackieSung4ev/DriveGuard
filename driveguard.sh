@@ -934,6 +934,35 @@ prune_remote_dir() {
   done
 }
 
+prepare_remote_layout() {
+  local base display_base remote_root remote_site remote_database
+  base="${RCLONE_REMOTE_PATH#/}"
+  base="${base%/}"
+  display_base="${base:-}"
+  remote_site="$(remote_dir_for "site")"
+  remote_database="$(remote_dir_for "database")"
+
+  check_rclone_remote
+  if [[ -n "$base" ]]; then
+    remote_root="$(remote_dir_for "")"
+    rclone mkdir "$remote_root" >>"$RCLONE_LOG_FILE" 2>&1
+  fi
+  rclone mkdir "$remote_site" >>"$RCLONE_LOG_FILE" 2>&1
+  rclone mkdir "$remote_database" >>"$RCLONE_LOG_FILE" 2>&1
+  if [[ -n "$display_base" ]]; then
+    log "Remote backup folders ready: ${RCLONE_REMOTE}:${display_base}/site and ${RCLONE_REMOTE}:${display_base}/database"
+  else
+    log "Remote backup folders ready: ${RCLONE_REMOTE}:site and ${RCLONE_REMOTE}:database"
+  fi
+}
+
+prepare_remote_command() {
+  require_root
+  load_config
+  ensure_dirs
+  prepare_remote_layout
+}
+
 upload_and_prune() {
   local local_file="$1"
   local subdir="$2"
@@ -1054,6 +1083,7 @@ backup_all() {
   fi
 
   ensure_cron_service || log "Warning: cron service check failed; verify cron manually"
+  prepare_remote_layout
 
   local site_count=0
   local mysql_count=0
@@ -1416,6 +1446,7 @@ Usage:
   $0 install-deps      Install Debian/Ubuntu/CentOS/RHEL dependencies
   $0 auth [provider]   Authorize Google Drive/OneDrive, or open provider picker
   $0 configure         Configure base settings, passwords, and MySQL/PostgreSQL connections
+  $0 prepare-remote    Create remote root, site, and database folders
   $0 cron              Install/update cron jobs
   $0 install-guard     Install systemd cron guard timer
   $0 guard-cron        Check and start cron service
@@ -1438,6 +1469,7 @@ main() {
     install-deps) install_dependencies ;;
     auth) configure_cloud_auth "${2:-}" ;;
     configure) configure_general ;;
+    prepare-remote) prepare_remote_command ;;
     cron) install_cron_entries ;;
     install-guard) install_systemd_guard ;;
     guard-cron) guard_cron ;;

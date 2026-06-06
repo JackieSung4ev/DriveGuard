@@ -3,8 +3,8 @@
 这篇记录一次真实的 DriveGuard 初始配置流程：服务器是 CentOS Stream 8，通过 Xshell 操作，备份目标是 Google Drive，并希望最终写入：
 
 ```text
-gdrive:backup/site/
-gdrive:backup/database/
+gdrive:driveguard/site/
+gdrive:driveguard/database/
 ```
 
 ## 1. 安装 git
@@ -81,11 +81,11 @@ Google Drive 配置里常见选项：
 
 | 提示 | 推荐选择 | 说明 |
 | --- | --- | --- |
-| `root_folder_id>` | 直接回车 | 让 DriveGuard 通过远程目录写入 `backup/` |
+| `root_folder_id>` | 直接回车 | 让 DriveGuard 通过远程目录写入 `driveguard/` |
 | `service_account_file>` | 直接回车 | 个人 Google 账号 OAuth 不需要 |
 | `Edit advanced config?` | `n` | 普通备份不需要高级配置 |
 
-想写入 `gdrive:backup/site/` 和 `gdrive:backup/database/` 时，不要填 `root_folder_id`。稍后在 `dg configure` 里把云端远程目录填成 `backup`。
+想写入 `gdrive:driveguard/site/` 和 `gdrive:driveguard/database/` 时，不要填 `root_folder_id`。稍后在 `dg configure` 里保持云端远程目录为 `driveguard`。
 
 如果 rclone 问是否自动打开浏览器：
 
@@ -181,8 +181,8 @@ q
 
 ```bash
 rclone lsd gdrive:
-rclone mkdir gdrive:backup
-rclone lsf gdrive:backup
+rclone mkdir gdrive:driveguard
+rclone lsf gdrive:driveguard
 ```
 
 ## 7. 配置 DriveGuard
@@ -197,7 +197,7 @@ dg configure
 
 ```text
 rclone remote 名称 [cloud]: gdrive
-云端远程目录 [driveguard]: backup
+云端远程目录 [driveguard]: 直接回车
 每个站点/数据库保留份数 [7]: 7
 本地备份暂存目录 [/var/backups/driveguard]: 直接回车
 定时表达式 cron [0 3 * * *]: 直接回车
@@ -262,14 +262,14 @@ blog_db
 网站会分别上传到：
 
 ```text
-gdrive:backup/site/站点名/
+gdrive:driveguard/site/站点名/
 ```
 
 数据库会分别上传到：
 
 ```text
-gdrive:backup/database/数据库名/
-gdrive:backup/database/postgresql/数据库名/
+gdrive:driveguard/database/数据库名/
+gdrive:driveguard/database/postgresql/数据库名/
 ```
 
 每个站点、每个数据库都会独立保留指定份数，例如 7 份。
@@ -302,5 +302,5 @@ systemctl status driveguard-cron-guard.timer
 - 网站和数据库都会加密，文件后缀分别是 `.tar.gz.enc` 和 `.sql.gz.enc`。
 - 多个网站、MySQL/MariaDB 数据库和 PostgreSQL 数据库会分别备份、分别上传、分别按保留份数清理。
 - 以后更新 DriveGuard，可以直接执行 `dg update`，或在 `dg menu` 中选择“更新 DriveGuard 脚本”。
-- `root_folder_id` 是限制 remote 根目录用的；只想写到 `backup/` 时，更简单的是在 `dg configure` 里把云端远程目录填 `backup`。
+- `root_folder_id` 是限制 remote 根目录用的；默认建议保持云端远程目录为 `driveguard`，这样 Google Drive 根目录下会出现 `driveguard/site/` 和 `driveguard/database/`。
 - 自建 Google OAuth Client 的 token 和 refresh token 都是敏感信息，不要公开。

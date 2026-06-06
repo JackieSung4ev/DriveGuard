@@ -80,9 +80,9 @@ There are two common approaches.
 The simpler approach is to leave `root_folder_id` blank and set DriveGuard's remote directory to `backup` in `sudo dg configure`. The final layout is:
 
 ```text
-cloud:backup/site/
-cloud:backup/database/
-cloud:backup/database/postgresql/
+cloud:driveguard/site/
+cloud:driveguard/database/
+cloud:driveguard/database/postgresql/
 ```
 
 DriveGuard creates the folder with `rclone mkdir` before uploading if it does not exist.
@@ -147,7 +147,7 @@ sudo dg configure
 Important values:
 
 - `rclone remote name`: enter `cloud`, `gdrive`, or your actual remote name.
-- `remote directory`: keep `driveguard`, or use `backup` if you want the Google Drive folder layout described above.
+- `remote directory`: keep `driveguard` for the default Google Drive root layout.
 - Set the backup encryption password.
 - Set MySQL/MariaDB or PostgreSQL connection details if database backups are needed.
 

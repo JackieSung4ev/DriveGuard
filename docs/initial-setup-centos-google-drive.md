@@ -3,9 +3,9 @@
 This guide documents a real first-time DriveGuard setup on a CentOS Stream 8 server over SSH/Xshell, using Google Drive as the remote target. The final layout is:
 
 ```text
-gdrive:backup/site/
-gdrive:backup/database/
-gdrive:backup/database/postgresql/
+gdrive:driveguard/site/
+gdrive:driveguard/database/
+gdrive:driveguard/database/postgresql/
 ```
 
 Chinese version: [Chinese docs](zh-CN/initial-setup-centos-google-drive.md)
@@ -77,11 +77,11 @@ Common Google Drive options:
 
 | Prompt | Recommended value | Why |
 | --- | --- | --- |
-| `root_folder_id>` | press Enter | Let DriveGuard write into `backup/` through its remote path setting |
+| `root_folder_id>` | press Enter | Let DriveGuard write into `driveguard/` through its remote path setting |
 | `service_account_file>` | press Enter | Personal Google OAuth does not need a service account |
 | `Edit advanced config?` | `n` | Advanced config is not needed for normal backups |
 
-If you want the final path to be `gdrive:backup/site/` and `gdrive:backup/database/`, leave `root_folder_id` empty. Later, set the DriveGuard remote path to `backup` in `dg configure`.
+If you want the final path to be `gdrive:driveguard/site/` and `gdrive:driveguard/database/`, leave `root_folder_id` empty. Later, keep the DriveGuard remote path as `driveguard` in `dg configure`.
 
 When rclone asks whether to open a browser automatically:
 
@@ -171,8 +171,8 @@ Verify the remote:
 
 ```bash
 rclone lsd gdrive:
-rclone mkdir gdrive:backup
-rclone lsf gdrive:backup
+rclone mkdir gdrive:driveguard
+rclone lsf gdrive:driveguard
 ```
 
 ## 7. Configure DriveGuard
@@ -187,7 +187,7 @@ Typical values:
 
 ```text
 rclone remote name [cloud]: gdrive
-remote directory [driveguard]: backup
+remote directory [driveguard]: press Enter
 retention copies per site/database [7]: 7
 local backup staging directory [/var/backups/driveguard]: press Enter
 cron expression [0 3 * * *]: press Enter
@@ -252,9 +252,9 @@ blog_db
 Remote layout:
 
 ```text
-gdrive:backup/site/site-name/
-gdrive:backup/database/mysql-db-name/
-gdrive:backup/database/postgresql/postgres-db-name/
+gdrive:driveguard/site/site-name/
+gdrive:driveguard/database/mysql-db-name/
+gdrive:driveguard/database/postgresql/postgres-db-name/
 ```
 
 Each site and database keeps its own retention count.

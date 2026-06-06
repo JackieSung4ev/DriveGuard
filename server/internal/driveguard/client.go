@@ -172,6 +172,9 @@ func (c *Client) EnablePlan(ctx context.Context, plan model.BackupPlan) (model.B
 
 	commandCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
+	if output, err := c.Run(commandCtx, "prepare-remote"); err != nil {
+		return model.BackupPlan{}, fmt.Errorf("prepare remote folders failed: %s", commandError(err, output))
+	}
 	if output, err := c.Run(commandCtx, "cron"); err != nil {
 		return model.BackupPlan{}, fmt.Errorf("install cron failed: %s", commandError(err, output))
 	}
