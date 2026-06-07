@@ -19,11 +19,6 @@ English is the default project language. DriveGuard is a Web UI-first backup sys
   <img src="web/public/screencapture-en.png" alt="DriveGuard Web UI dashboard screenshot in English" width="960">
 </p>
 
-<p align="center">
-  <strong>Chinese Web UI</strong><br>
-  <img src="web/public/screencapture-cn.png" alt="DriveGuard Web UI dashboard screenshot in Chinese" width="960">
-</p>
-
 ## Product Paths
 
 | Path | Best for | Entry point | Guide |
