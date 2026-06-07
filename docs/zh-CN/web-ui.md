@@ -80,7 +80,7 @@ Web UI 是服务器备份运维控制台，不会替代或隐藏 CLI，而是在
 
 当前备份计划实现会把 Web UI 表单映射到现有 CLI 的单一计划配置。“保存并启用”会更新 CLI 配置文件，通过 `dg cron` 安装 root crontab，并通过 `dg install-guard` 安装 systemd cron 守护。多计划编排可以在单计划服务器面板流程稳定后再扩展。
 
-初始云端支持聚焦在 Google Drive 和 Microsoft OneDrive，底层仍通过 `rclone` 授权和上传。其他高级 provider 可以继续通过 CLI 的 `rclone config` 处理。
+当前 Web UI 云盘流程已验证 Google Drive。Microsoft OneDrive 可能会在界面和 CLI 引擎里显示，但 Web UI 授权/操作流程还没做好；在浏览器流程完成前，OneDrive 请先使用 CLI 的 `sudo dg auth onedrive`。其他高级 provider 可以继续通过 CLI 的 `rclone config` 处理。
 
 服务器配置 `DRIVEGUARD_PUBLIC_URL`、`DRIVEGUARD_GOOGLE_CLIENT_ID` 和 `DRIVEGUARD_GOOGLE_CLIENT_SECRET` 后，Google Drive 可以使用 Web OAuth 直连授权。Google OAuth client 必须是 Web application 类型，并加入这个 Authorized redirect URI：
 

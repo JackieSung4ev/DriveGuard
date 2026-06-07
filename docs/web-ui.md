@@ -80,7 +80,7 @@ The Web UI is an operations console for server backups. It does not remove or hi
 
 The current scheduled-backup implementation intentionally maps the Web UI form to the existing single CLI schedule. "Save and enable" updates the CLI config file, installs the root crontab entry with `dg cron`, and installs the systemd cron guard with `dg install-guard`. Multi-plan orchestration can be added later after the single-plan server-panel workflow stays reliable.
 
-Initial provider support is intentionally focused on Google Drive and Microsoft OneDrive through `rclone`. Advanced `rclone config` remains available through the CLI for other providers.
+Current Web UI provider support is verified with Google Drive. Microsoft OneDrive may appear as a provider in the UI and CLI engine, but the Web UI authorization/workflow is not ready yet; use `sudo dg auth onedrive` from the CLI for OneDrive until the browser flow is completed. Advanced `rclone config` remains available through the CLI for other providers.
 
 Google Drive can use direct Web OAuth when the server has `DRIVEGUARD_PUBLIC_URL`, `DRIVEGUARD_GOOGLE_CLIENT_ID`, and `DRIVEGUARD_GOOGLE_CLIENT_SECRET` configured. The Google OAuth client must be a Web application client with this authorized redirect URI:
 

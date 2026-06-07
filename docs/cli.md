@@ -42,6 +42,17 @@ sudo dg install-guard
 | `sudo dg log 100` | Show recent logs |
 | `sudo dg uninstall` | Remove the script and scheduled jobs |
 
+## Cloud Drive Support
+
+The CLI has guided authorization for Google Drive and Microsoft OneDrive:
+
+```bash
+sudo dg auth google
+sudo dg auth onedrive
+```
+
+For other storage providers, choose advanced `rclone config` from `sudo dg auth` and configure any rclone remote that supports basic directory and file operations, such as S3, WebDAV, SFTP, or another rclone backend.
+
 ## Key Paths
 
 ```text

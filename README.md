@@ -15,7 +15,13 @@ English is the default project language. DriveGuard is a Web UI-first backup sys
 ![Schedule](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
 <p align="center">
-  <img src="web/dist/screencapture.png" alt="DriveGuard Web UI dashboard screenshot" width="960">
+  <strong>English Web UI</strong><br>
+  <img src="web/public/screencapture-en.png" alt="DriveGuard Web UI dashboard screenshot in English" width="960">
+</p>
+
+<p align="center">
+  <strong>Chinese Web UI</strong><br>
+  <img src="web/public/screencapture-cn.png" alt="DriveGuard Web UI dashboard screenshot in Chinese" width="960">
 </p>
 
 ## Product Paths
@@ -24,6 +30,13 @@ English is the default project language. DriveGuard is a Web UI-first backup sys
 | --- | --- | --- | --- |
 | Web UI (default) | Browser-based backup plans, cloud authorization, logs, restore actions, and account security | `driveguard-web.sh` | [Web UI guide](docs/web-ui.md) |
 | CLI | SSH-only servers, automation, minimal installations, and terminal-first backups | `driveguard.sh` / `dg` | [CLI guide](docs/cli.md) |
+
+## Cloud Drive Support
+
+| Path | Supported providers | Current status |
+| --- | --- | --- |
+| CLI | Google Drive (`sudo dg auth google`), Microsoft OneDrive (`sudo dg auth onedrive`), and advanced `rclone config` for providers such as S3, WebDAV, SFTP, or any compatible rclone remote | Guided Google Drive and OneDrive authorization are available; other providers use the rclone flow directly |
+| Web UI | Google Drive Web OAuth, with CLI-style Google authorization fallback when Web OAuth is not configured | Google Drive is the tested Web UI path. Microsoft OneDrive UI support is not ready yet; use the CLI path for OneDrive for now |
 
 ## Web UI
 

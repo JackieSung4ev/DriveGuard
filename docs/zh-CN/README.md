@@ -15,7 +15,13 @@
 ![Schedule](https://img.shields.io/badge/schedule-cron%20%2B%20systemd-lightgrey)
 
 <p align="center">
-  <img src="../../web/dist/screencapture.png" alt="DriveGuard Web UI 仪表盘截图" width="960">
+  <strong>中文 Web UI</strong><br>
+  <img src="../../web/public/screencapture-cn.png" alt="DriveGuard Web UI 中文仪表盘截图" width="960">
+</p>
+
+<p align="center">
+  <strong>英文 Web UI</strong><br>
+  <img src="../../web/public/screencapture-en.png" alt="DriveGuard Web UI 英文仪表盘截图" width="960">
 </p>
 
 ## 产品入口
@@ -24,6 +30,13 @@
 | --- | --- | --- | --- |
 | Web UI（默认） | 在浏览器里管理备份计划、云端授权、运行日志、恢复操作和账号安全 | `driveguard-web.sh` | [Web UI 指南](web-ui.md) |
 | CLI | 只通过 SSH 操作、自动化脚本、最小化安装和终端优先的备份流程 | `driveguard.sh` / `dg` | [CLI 指南](cli.md) |
+
+## 云盘支持
+
+| 入口 | 支持的云盘 | 当前状态 |
+| --- | --- | --- |
+| CLI | Google Drive（`sudo dg auth google`）、Microsoft OneDrive（`sudo dg auth onedrive`），以及通过高级 `rclone config` 接入的 S3、WebDAV、SFTP 或其他兼容 rclone remote | Google Drive 和 OneDrive 有引导式授权入口；其他 provider 直接走 rclone 流程 |
+| Web UI | Google Drive Web OAuth；未配置 Web OAuth 时可回退到 CLI 风格的 Google 授权 | 目前 Web UI 已测试 Google Drive。Microsoft OneDrive 的 WebUI 流程还没做好，暂时请用 CLI 入口处理 OneDrive |
 
 ## Web UI
 

@@ -42,6 +42,17 @@ sudo dg install-guard
 | `sudo dg log 100` | 查看最近日志 |
 | `sudo dg uninstall` | 卸载脚本和定时任务 |
 
+## 云盘支持
+
+CLI 已提供 Google Drive 和 Microsoft OneDrive 的引导式授权：
+
+```bash
+sudo dg auth google
+sudo dg auth onedrive
+```
+
+其他云端存储可以在 `sudo dg auth` 中选择高级 `rclone config`，配置任何支持基础目录和文件操作的 rclone remote，例如 S3、WebDAV、SFTP 或其他 rclone backend。
+
 ## 关键路径
 
 ```text
